@@ -1,0 +1,88 @@
+@use 'sass:color';
+@use 'variables' as *;
+@use 'mixins' as *;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: $bg-primary;
+  color: $text-primary;
+  line-height: 1.6;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  
+  .app-header {
+    padding: $spacing-lg $container-padding;
+    text-align: center;
+    background-color: $bg-secondary;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    
+    h1 {
+      font-size: 2rem;
+      margin-bottom: $spacing-xs;
+      color: $text-primary;
+      
+      @include tablet {
+        font-size: 2.5rem;
+      }
+    }
+    
+    .subtitle {
+      color: $text-secondary;
+      font-size: 1rem;
+      
+      @include tablet {
+        font-size: 1.1rem;
+      }
+    }
+  }
+  
+  .app-main {
+    flex: 1;
+    @include container;
+    padding-top: $spacing-xl;
+    padding-bottom: $spacing-xl;
+  }
+}
+
+.error-message {
+  background-color: rgba($error-color, 0.1);
+  border: 1px solid $error-color;
+  border-radius: $border-radius;
+  padding: $spacing-md;
+  margin-bottom: $spacing-lg;
+  text-align: center;
+  
+  p {
+    color: $error-color;
+    margin-bottom: $spacing-sm;
+  }
+  
+  button {
+    @include button-base;
+    background-color: $error-color;
+    color: $text-primary;
+    
+    &:hover {
+      background-color: color.adjust($error-color, $lightness: -10%);
+    }
+  }
+}
+

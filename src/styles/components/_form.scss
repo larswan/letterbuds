@@ -1,0 +1,57 @@
+@use 'sass:color';
+@use '../variables' as *;
+@use '../mixins' as *;
+
+.watchlist-form {
+  width: 100%;
+  
+  .form-group {
+    margin-bottom: $spacing-md;
+    
+    label {
+      display: block;
+      margin-bottom: $spacing-xs;
+      color: $text-secondary;
+      font-weight: 500;
+      font-size: 0.9rem;
+    }
+    
+    input {
+      width: 100%;
+      padding: $spacing-sm;
+      background-color: $bg-secondary;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: $border-radius;
+      color: $text-primary;
+      font-size: 1rem;
+      transition: border-color 0.2s ease;
+      
+      &:focus {
+        outline: none;
+        border-color: $accent-primary;
+      }
+      
+      &::placeholder {
+        color: $text-muted;
+      }
+      
+      &:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+    }
+  }
+  
+  .match-button {
+    @include button-base;
+    width: 100%;
+    background-color: $accent-primary;
+    color: $bg-primary;
+    margin-top: $spacing-md;
+    
+    &:not(:disabled):hover {
+      background-color: color.adjust($accent-primary, $lightness: 5%);
+    }
+  }
+}
+

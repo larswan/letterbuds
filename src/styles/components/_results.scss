@@ -1,0 +1,115 @@
+@use 'sass:color';
+@use '../variables' as *;
+@use '../mixins' as *;
+
+.match-results {
+  width: 100%;
+  
+  .results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: $spacing-lg;
+    flex-wrap: wrap;
+    gap: $spacing-sm;
+    
+    h2 {
+      margin: 0;
+      color: $text-primary;
+    }
+    
+    .reset-button {
+      @include button-base;
+      background-color: $bg-secondary;
+      color: $text-primary;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      
+      &:hover {
+        background-color: color.adjust($bg-secondary, $lightness: 5%);
+      }
+    }
+  }
+  
+  .results-summary {
+    background-color: $bg-secondary;
+    padding: $spacing-md;
+    border-radius: $border-radius;
+    margin-bottom: $spacing-lg;
+    
+    p {
+      margin: $spacing-xs 0;
+      color: $text-secondary;
+      
+      strong {
+        color: $text-primary;
+      }
+    }
+    
+    .common-count {
+      margin-top: $spacing-sm;
+      padding-top: $spacing-sm;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 1.1rem;
+      color: $accent-primary;
+      
+      strong {
+        color: $accent-primary;
+        font-size: 1.3rem;
+      }
+    }
+  }
+  
+  .no-results {
+    text-align: center;
+    padding: $spacing-xl;
+    color: $text-muted;
+  }
+  
+  .films-list {
+    display: grid;
+    gap: $spacing-md;
+    
+    @include tablet {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+}
+
+.film-card {
+  background-color: $bg-secondary;
+  border-radius: $border-radius;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+  
+  .film-poster {
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+    display: block;
+  }
+  
+  .film-info {
+    padding: $spacing-sm;
+    
+    .film-title {
+      margin: 0 0 $spacing-xs 0;
+      color: $text-primary;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+    
+    .film-year {
+      margin: 0;
+      color: $text-muted;
+      font-size: 0.9rem;
+    }
+  }
+}
+

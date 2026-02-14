@@ -1,0 +1,37 @@
+// Colors
+$bg-primary: #1a1a1a;
+$bg-secondary: #2a2a2a;
+$text-primary: #ffffff;
+$text-secondary: #e0e0e0;
+$text-muted: #999999;
+
+// Letterboxd brand colors (sparingly used)
+$letterboxd-orange: #ff9a00;
+$letterboxd-green: #00d474;
+$letterboxd-blue: #00a8ff;
+
+// Accent colors
+$accent-primary: $letterboxd-orange;
+$error-color: #ff4444;
+$success-color: $letterboxd-green;
+
+// Breakpoints (mobile-first)
+$breakpoint-mobile: 320px;
+$breakpoint-tablet: 768px;
+$breakpoint-desktop: 1024px;
+
+// Spacing
+$spacing-xs: 0.5rem;
+$spacing-sm: 1rem;
+$spacing-md: 1.5rem;
+$spacing-lg: 2rem;
+$spacing-xl: 3rem;
+
+// Container
+$container-max-width: 600px;
+$container-padding: $spacing-md;
+
+// Border radius
+$border-radius: 8px;
+$border-radius-lg: 12px;
+
