@@ -2,6 +2,7 @@ import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import cors from 'cors';
+import { load } from 'cheerio';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -50,8 +51,8 @@ app.get('/api/watchlist/:username', async (req, res) => {
         }
         console.error(`[${new Date().toISOString()}] [PROXY] Error response body:`, errorText);
         
-        // Retry on 403 or 429 (rate limiting)
-        if ((response.status === 403 || response.status === 429) && attempt < maxRetries) {
+        // Retry on 403, 429, or 503 (rate limiting or service unavailable)
+        if ((response.status === 403 || response.status === 429 || response.status === 503) && attempt < maxRetries) {
           lastError = { status: response.status, text: errorText };
           continue; // Retry
         }
@@ -71,6 +72,15 @@ app.get('/api/watchlist/:username', async (req, res) => {
             error: 'Rate limit exceeded. Too many requests to the letterboxd-list-radarr API.',
             details: errorText,
             suggestion: 'Please wait a few moments and try again.'
+          });
+        }
+        
+        // Handle 503 (Service Unavailable)
+        if (response.status === 503) {
+          return res.status(503).json({ 
+            error: 'Service temporarily unavailable. The letterboxd-list-radarr API may be overloaded or down.',
+            details: errorText,
+            suggestion: 'Please wait a few moments and try again. The service may be experiencing high traffic.'
           });
         }
         
@@ -101,6 +111,86 @@ app.get('/api/watchlist/:username', async (req, res) => {
         });
       }
     }
+  }
+});
+
+// Scrape user profile endpoint
+app.get('/api/profile/:username', async (req, res) => {
+  const { username } = req.params;
+  const profileUrl = `https://letterboxd.com/${username}/`;
+  
+  console.log(`[${new Date().toISOString()}] [SCRAPE] Scraping profile for ${username} from ${profileUrl}`);
+  
+  try {
+    const response = await fetch(profileUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+      },
+    });
+    
+    if (!response.ok) {
+      console.error(`[${new Date().toISOString()}] [SCRAPE] Failed to fetch profile: ${response.status} ${response.statusText}`);
+      return res.status(response.status).json({ 
+        error: `Failed to fetch profile: ${response.status} ${response.statusText}`,
+        username
+      });
+    }
+    
+    const html = await response.text();
+    const $ = load(html);
+    
+    // Check if this is actually a profile page (not an error page)
+    // Look for profile-specific elements
+    const hasProfileHeader = $('.profile-header, .profile-summary').length > 0;
+    const hasProfileName = $('.person-display-name, .profile-name-and-actions').length > 0;
+    
+    // If no profile elements found, user doesn't exist
+    if (!hasProfileHeader && !hasProfileName) {
+      console.log(`[${new Date().toISOString()}] [SCRAPE] No profile found for ${username}`);
+      return res.status(404).json({ 
+        error: 'User not found',
+        username
+      });
+    }
+    
+    // Find the avatar image - it's in a div with class "profile-avatar" containing an img
+    let avatarUrl = null;
+    
+    // Try multiple selectors to find the avatar
+    let avatarImg = $('.profile-avatar img').first();
+    if (avatarImg.length === 0) {
+      avatarImg = $('.profile-avatar .avatar img').first();
+    }
+    if (avatarImg.length === 0) {
+      avatarImg = $(`img[alt="${username}"]`).first();
+    }
+    if (avatarImg.length === 0) {
+      // Try looking for any avatar in the profile header
+      const profileHeader = $('.profile-header, .profile-summary');
+      avatarImg = profileHeader.find('img').first();
+    }
+    
+    if (avatarImg.length > 0) {
+      avatarUrl = avatarImg.attr('src') || null;
+    }
+    
+    console.log(`[${new Date().toISOString()}] [SCRAPE] Successfully scraped profile for ${username}, avatar: ${avatarUrl || 'not found'}`);
+    
+    return res.json({
+      username,
+      avatarUrl,
+    });
+    
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[${new Date().toISOString()}] [SCRAPE] Error scraping profile for ${username}:`, errorMessage);
+    return res.status(500).json({ 
+      error: 'Failed to scrape profile',
+      message: errorMessage,
+      username
+    });
   }
 });
 

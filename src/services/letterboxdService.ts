@@ -1,4 +1,4 @@
-import { Film } from '../types';
+import { Film, UserProfile } from '../types';
 
 // Use proxy endpoint (works in both dev and production)
 // In dev: Vite proxies /api to Express server
@@ -35,6 +35,12 @@ export async function fetchWatchlist(username: string): Promise<Film[]> {
       if (response.status === 429) {
         const errorMsg = errorData?.error || errorData?.suggestion || 'Rate limit exceeded. Please wait a few moments and try again.';
         console.error(`[${timestamp}] [ERROR] Rate limit exceeded for ${username}:`, errorMsg);
+        throw new Error(errorMsg);
+      }
+      
+      if (response.status === 503) {
+        const errorMsg = errorData?.error || errorData?.suggestion || 'Service temporarily unavailable. The API may be overloaded. Please try again in a moment.';
+        console.error(`[${timestamp}] [ERROR] Service unavailable for ${username}:`, errorMsg);
         throw new Error(errorMsg);
       }
       
@@ -87,6 +93,56 @@ export async function fetchWatchlist(username: string): Promise<Film[]> {
     const timestamp = new Date().toISOString();
     console.error(`[${timestamp}] [ERROR] Error fetching ${username}:`, error);
     throw error;
+  }
+}
+
+export async function fetchUserProfile(username: string, throwOnError: boolean = false): Promise<UserProfile> {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] [FETCH] Fetching profile for ${username}...`);
+
+  try {
+    const url = `${API_BASE_URL}/profile/${username}`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      let errorData: any = null;
+      try {
+        errorData = await response.json();
+      } catch (e) {
+        // If response is not JSON, use status text
+      }
+      
+      if (response.status === 404) {
+        console.error(`[${timestamp}] [ERROR] User ${username} not found`);
+        const error = new Error(`User "${username}" not found`);
+        if (throwOnError) throw error;
+        return { username, avatarUrl: null };
+      }
+      
+      const errorMsg = errorData?.error || `Failed to fetch profile: ${response.status} ${response.statusText}`;
+      const error = new Error(errorMsg);
+      if (throwOnError) throw error;
+      return { username, avatarUrl: null };
+    }
+
+    const data = await response.json();
+    console.log(`[${new Date().toISOString()}] [SUCCESS] Retrieved profile for ${username}, avatar: ${data.avatarUrl || 'none'}`);
+    
+    return {
+      username: data.username || username,
+      avatarUrl: data.avatarUrl || null,
+    };
+  } catch (error) {
+    const timestamp = new Date().toISOString();
+    console.error(`[${timestamp}] [ERROR] Error fetching profile for ${username}:`, error);
+    if (throwOnError) {
+      throw error;
+    }
+    // Return a profile with null avatar on error (non-blocking)
+    return {
+      username,
+      avatarUrl: null,
+    };
   }
 }
 

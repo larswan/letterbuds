@@ -45,6 +45,20 @@
       }
     }
     
+    .user-summary {
+      display: flex;
+      align-items: center;
+      gap: $spacing-sm;
+      
+      .user-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        object-fit: cover;
+        flex-shrink: 0;
+      }
+    }
+    
     .common-count {
       margin-top: $spacing-sm;
       padding-top: $spacing-sm;
@@ -71,6 +85,53 @@
     
     @include tablet {
       grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  
+  .films-list-grouped {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-xl;
+  }
+  
+  .user-group-section {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-lg;
+  }
+  
+  .user-group {
+    background-color: $bg-secondary;
+    padding: $spacing-md;
+    border-radius: $border-radius;
+    
+    &.user-group-empty {
+      opacity: 0.7;
+    }
+    
+    .group-heading {
+      margin: 0 0 $spacing-xs 0;
+      color: $accent-primary;
+      font-size: 1.3rem;
+      font-weight: 600;
+    }
+    
+    .group-subheading {
+      margin: 0 0 $spacing-md 0;
+      color: $text-secondary;
+      font-size: 1rem;
+      font-weight: 500;
+    }
+    
+    .no-films-message {
+      margin: 0;
+      color: $text-muted;
+      font-size: 0.9rem;
+      font-style: italic;
+    }
+    
+    .films-list {
+      margin-top: $spacing-md;
     }
   }
 }

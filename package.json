@@ -7,15 +7,17 @@
     "dev": "vite",
     "dev:server": "node server.js",
     "build": "tsc && vite build",
-    "start": "NODE_ENV=production node server.js",
+    "start": "node server.js",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
   },
   "dependencies": {
+    "cheerio": "^1.2.0",
     "cors": "^2.8.6",
     "express": "^4.22.1",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "react-icons": "^5.5.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",

@@ -1,15 +1,36 @@
-import { MatchResult, Film } from '../types';
+import { MultiUserMatchResult, Film, UserProfile } from '../types';
 import '../styles/components/_results.scss';
 
 interface MatchResultsProps {
-  result: MatchResult;
-  username1: string;
-  username2: string;
+  result: MultiUserMatchResult;
+  usernames: string[];
+  profiles: (UserProfile | null)[];
   onReset: () => void;
 }
 
-export function MatchResults({ result, username1, username2, onReset }: MatchResultsProps) {
-  const { commonFilms, counts } = result;
+export function MatchResults({ result, usernames, profiles, onReset }: MatchResultsProps) {
+  const { userGroups, userWatchlistCounts } = result;
+
+  // Group results by number of users
+  const groupsByUserCount = userGroups.reduce((acc, group) => {
+    const count = group.usernames.length;
+    if (!acc[count]) {
+      acc[count] = [];
+    }
+    acc[count].push(group);
+    return acc;
+  }, {} as Record<number, typeof userGroups>);
+
+  // Sort user counts descending (more users first)
+  const sortedUserCounts = Object.keys(groupsByUserCount)
+    .map(Number)
+    .sort((a, b) => b - a);
+
+  // Get profile map for easy lookup
+  const profileMap = new Map<string, UserProfile | null>();
+  usernames.forEach((username, index) => {
+    profileMap.set(username, profiles[index] || null);
+  });
 
   return (
     <div className="match-results">
@@ -21,26 +42,69 @@ export function MatchResults({ result, username1, username2, onReset }: MatchRes
       </div>
 
       <div className="results-summary">
-        <p>
-          <strong>{username1}</strong> has <strong>{counts.user1}</strong> films in watchlist
-        </p>
-        <p>
-          <strong>{username2}</strong> has <strong>{counts.user2}</strong> films in watchlist
-        </p>
-        <p className="common-count">
-          <strong>{counts.common}</strong> {counts.common === 1 ? 'film' : 'films'} in common
-        </p>
+        {usernames.map((username, index) => {
+          const profile = profileMap.get(username);
+          const count = userWatchlistCounts[username] || 0;
+          return (
+            <p key={username} className="user-summary">
+              {profile?.avatarUrl && (
+                <img 
+                  src={profile.avatarUrl} 
+                  alt={username}
+                  className="user-avatar"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              )}
+              <strong>{username}</strong> has <strong>{count}</strong> films in watchlist
+            </p>
+          );
+        })}
       </div>
 
-      {commonFilms.length === 0 ? (
+      {userGroups.length === 0 ? (
         <div className="no-results">
           <p>No common films found in watchlists.</p>
         </div>
       ) : (
-        <div className="films-list">
-          {commonFilms.map((film, index) => (
-            <FilmCard key={index} film={film} />
-          ))}
+        <div className="films-list-grouped">
+          {sortedUserCounts.map(userCount => {
+            const groups = groupsByUserCount[userCount];
+            // Sort groups by film count (descending)
+            const sortedGroups = [...groups].sort((a, b) => b.filmCount - a.filmCount);
+
+            return (
+              <div key={userCount} className="user-group-section">
+                {sortedGroups.map((group, groupIndex) => {
+                  const userNames = group.usernames.join(' + ');
+                  
+                  if (group.filmCount === 0) {
+                    return (
+                      <div key={groupIndex} className="user-group user-group-empty">
+                        <h4 className="group-subheading">{userNames}</h4>
+                        <p className="no-films-message">have 0 films in common</p>
+                      </div>
+                    );
+                  }
+                  
+                  return (
+                    <div key={groupIndex} className="user-group">
+                      <h3 className="group-heading">
+                        {group.filmCount} {group.filmCount === 1 ? 'film' : 'films'} in common
+                      </h3>
+                      <h4 className="group-subheading">{userNames}</h4>
+                      <div className="films-list">
+                        {group.commonFilms.map((film, index) => (
+                          <FilmCard key={index} film={film} />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -67,4 +131,3 @@ function FilmCard({ film }: { film: Film }) {
     </div>
   );
 }
-

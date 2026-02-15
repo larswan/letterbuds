@@ -14,31 +14,160 @@
       color: $text-secondary;
       font-weight: 500;
       font-size: 0.9rem;
+      
+      .label-with-avatar {
+        display: flex;
+        align-items: center;
+        gap: $spacing-xs;
+        
+        .label-avatar {
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          object-fit: cover;
+          flex-shrink: 0;
+        }
+      }
     }
     
-    input {
-      width: 100%;
-      padding: $spacing-sm;
-      background-color: $bg-secondary;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: $border-radius;
-      color: $text-primary;
-      font-size: 1rem;
-      transition: border-color 0.2s ease;
+    .input-wrapper {
+      position: relative;
       
-      &:focus {
-        outline: none;
-        border-color: $accent-primary;
+      input {
+        width: 100%;
+        padding: $spacing-sm;
+        padding-right: 40px; // Make room for icon
+        background-color: $bg-secondary;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: $border-radius;
+        color: $text-primary;
+        font-size: 1rem;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        
+        &:focus {
+          outline: none;
+          border-color: $accent-primary;
+        }
+        
+        &::placeholder {
+          color: $text-muted;
+        }
+        
+        &:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+        
+        &.valid {
+          border-color: #4ade80; // green-400
+          box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.2);
+        }
+        
+        &.invalid {
+          border-color: #f87171; // red-400
+          box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.2);
+        }
       }
       
-      &::placeholder {
+      .remove-user-button {
+        position: absolute;
+        right: 45px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
         color: $text-muted;
+        cursor: pointer;
+        padding: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        transition: color 0.2s ease;
+        z-index: 1;
+        
+        &:hover {
+          color: #f87171; // red-400
+        }
+        
+        &:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
       }
       
-      &:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
+      // Adjust input padding when remove button is present
+      &:has(.remove-user-button) input {
+        padding-right: 70px;
       }
+      
+      .input-icon {
+        position: absolute;
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        animation: fadeInScale 0.3s ease-out;
+        
+        &.validating {
+          .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: $accent-primary;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+          }
+        }
+        
+        &.valid-icon {
+          color: #4ade80; // green-400
+          font-size: 16px;
+          animation: checkmark 0.5s ease-out;
+        }
+        
+        &.invalid-icon {
+          color: #f87171; // red-400
+          font-size: 16px;
+          animation: shake 0.4s ease-out;
+        }
+      }
+    }
+    
+    .error-message {
+      margin-top: $spacing-xs;
+      color: #f87171; // red-400
+      font-size: 0.875rem;
+      animation: slideDown 0.3s ease-out;
+      display: flex;
+      align-items: center;
+      gap: $spacing-xs;
+    }
+  }
+  
+  .add-user-button {
+    @include button-base;
+    width: 100%;
+    background-color: $bg-secondary;
+    color: $text-primary;
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+    margin-bottom: $spacing-md;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: $spacing-xs;
+    
+    &:not(:disabled):hover {
+      background-color: color.adjust($bg-secondary, $lightness: 5%);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+    
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
   }
   
@@ -52,6 +181,66 @@
     &:not(:disabled):hover {
       background-color: color.adjust($accent-primary, $lightness: 5%);
     }
+    
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+}
+
+// Animations
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes checkmark {
+  0% {
+    opacity: 0;
+    transform: translateY(-50%) scale(0) rotate(-45deg);
+  }
+  50% {
+    transform: translateY(-50%) scale(1.2) rotate(-45deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1) rotate(0deg);
+  }
+}
+
+@keyframes shake {
+  0%, 100% {
+    transform: translateY(-50%) translateX(0);
+  }
+  10%, 30%, 50%, 70%, 90% {
+    transform: translateY(-50%) translateX(-4px);
+  }
+  20%, 40%, 60%, 80% {
+    transform: translateY(-50%) translateX(4px);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 

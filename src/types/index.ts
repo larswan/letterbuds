@@ -18,3 +18,19 @@ export interface MatchResult {
   };
 }
 
+export interface UserGroupMatch {
+  usernames: string[];
+  commonFilms: Film[];
+  filmCount: number;
+}
+
+export interface MultiUserMatchResult {
+  userGroups: UserGroupMatch[];
+  userWatchlistCounts: Record<string, number>;
+}
+
+export interface UserProfile {
+  username: string;
+  avatarUrl: string | null;
+}
+
