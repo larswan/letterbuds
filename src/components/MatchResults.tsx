@@ -42,7 +42,7 @@ export function MatchResults({ result, usernames, profiles, onReset }: MatchResu
       </div>
 
       <div className="results-summary">
-        {usernames.map((username, index) => {
+        {usernames.map((username) => {
           const profile = profileMap.get(username);
           const count = userWatchlistCounts[username] || 0;
           return (
