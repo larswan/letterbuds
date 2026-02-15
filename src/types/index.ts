@@ -34,3 +34,9 @@ export interface UserProfile {
   avatarUrl: string | null;
 }
 
+export interface FollowingUser {
+  username: string;
+  avatarUrl: string | null;
+  displayName?: string;
+}
+

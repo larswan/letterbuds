@@ -13,6 +13,72 @@ const PORT = process.env.PORT || 3000;
 // Enable CORS for all routes
 app.use(cors());
 
+// Proxy endpoint for fetching following list
+app.get('/api/following/:username', async (req, res) => {
+  const { username } = req.params;
+  const followingUrl = `https://letterboxd.com/${username}/following/`;
+  
+  console.log(`[${new Date().toISOString()}] [PROXY] Fetching following list for ${username} from ${followingUrl}`);
+  
+  try {
+    const response = await fetch(followingUrl, {
+      headers: {
+        'User-Agent': 'curl/7.68.0',
+      },
+    });
+    
+    if (!response.ok) {
+      console.error(`[${new Date().toISOString()}] [PROXY] Error fetching following: ${response.status} ${response.statusText}`);
+      return res.status(response.status).json({ 
+        error: `Failed to fetch following list: ${response.status} ${response.statusText}` 
+      });
+    }
+    
+    const html = await response.text();
+    
+    // Parse HTML to extract following users
+    // Pattern: <tr> with table-person, contains avatar link and name link
+    const followingUsers = [];
+    
+    // Match table rows containing person-summary divs
+    const rowMatches = html.match(/<tr[^>]*>[\s\S]*?<td[^>]*class="[^"]*col-member[^"]*"[^>]*>[\s\S]*?<div[^>]*class="[^"]*person-summary[^"]*"[\s\S]*?<\/tr>/g);
+    
+    if (rowMatches) {
+      for (const row of rowMatches) {
+        // Extract avatar URL and username from avatar link
+        const avatarMatch = row.match(/<a[^>]*class="[^"]*avatar[^"]*"[^>]*href="\/([^\/"]+)\/"[^>]*>[\s\S]*?<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"[^>]*>/);
+        
+        // Extract username and display name from name link
+        const nameMatch = row.match(/<a[^>]*href="\/([^\/"]+)\/"[^>]*class="[^"]*name[^"]*"[^>]*>[\s\S]*?([^<]+)<\/a>/);
+        
+        if (avatarMatch || nameMatch) {
+          const username = (nameMatch?.[1] || avatarMatch?.[1] || '').trim();
+          const avatarUrl = avatarMatch?.[2]?.trim() || null;
+          const displayName = (nameMatch?.[2]?.trim() || avatarMatch?.[3]?.trim() || username).trim();
+          
+          if (username) {
+            followingUsers.push({
+              username,
+              avatarUrl: avatarUrl || null,
+              displayName: displayName && displayName !== username ? displayName : undefined,
+            });
+          }
+        }
+      }
+    }
+    
+    console.log(`[${new Date().toISOString()}] [PROXY] Successfully parsed ${followingUsers.length} following users for ${username}`);
+    res.json({ following: followingUsers });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[${new Date().toISOString()}] [PROXY] Error fetching following:`, errorMessage);
+    res.status(500).json({ 
+      error: 'Failed to fetch following list',
+      message: errorMessage
+    });
+  }
+});
+
 // Proxy endpoint for letterboxd-list-radarr API
 app.get('/api/watchlist/:username', async (req, res) => {
   const { username } = req.params;

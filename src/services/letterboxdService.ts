@@ -1,4 +1,4 @@
-import { Film, UserProfile } from '../types';
+import { Film, UserProfile, FollowingUser } from '../types';
 
 // Use proxy endpoint (works in both dev and production)
 // In dev: Vite proxies /api to Express server
@@ -143,6 +143,44 @@ export async function fetchUserProfile(username: string, throwOnError: boolean =
       username,
       avatarUrl: null,
     };
+  }
+}
+
+export async function fetchFollowing(username: string): Promise<FollowingUser[]> {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] [FETCH] Fetching following list for ${username}...`);
+
+  try {
+    const url = `${API_BASE_URL}/following/${username}`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      let errorData: any = null;
+      try {
+        errorData = await response.json();
+      } catch (e) {
+        // If response is not JSON, use status text
+      }
+      
+      if (response.status === 404) {
+        console.error(`[${timestamp}] [ERROR] User ${username} not found or following list is empty`);
+        throw new Error(`User "${username}" not found or following list is empty`);
+      }
+      
+      const errorMsg = errorData?.error || `Failed to fetch following list: ${response.status} ${response.statusText}`;
+      throw new Error(errorMsg);
+    }
+
+    const data = await response.json();
+    const following = data.following || [];
+    
+    console.log(`[${new Date().toISOString()}] [SUCCESS] Retrieved ${following.length} following users for ${username}`);
+    
+    return following;
+  } catch (error) {
+    const timestamp = new Date().toISOString();
+    console.error(`[${timestamp}] [ERROR] Error fetching following for ${username}:`, error);
+    throw error;
   }
 }
 

@@ -1,7 +1,8 @@
 import { useState, useEffect, FormEvent, KeyboardEvent } from 'react';
 import { FaCheck, FaTimes, FaPlus, FaTimesCircle } from 'react-icons/fa';
 import { fetchUserProfile } from '../services/letterboxdService';
-import { UserProfile } from '../types';
+import { UserProfile, FollowingUser } from '../types';
+import { FollowingDropdown } from './FollowingDropdown';
 import '../styles/components/_form.scss';
 
 interface WatchlistFormProps {
@@ -197,6 +198,53 @@ export function WatchlistForm({
     }
   };
 
+  const handleSelectFollowingUser = (selectedUser: FollowingUser, fromUserId: string) => {
+    // Find the next empty user field (excluding the one that triggered this)
+    const emptyFieldIndex = userInputs.findIndex(
+      (input) => input.id !== fromUserId && !input.username.trim()
+    );
+
+    if (emptyFieldIndex !== -1) {
+      // Fill the empty field
+      const targetId = userInputs[emptyFieldIndex].id;
+      setUserInputs(prev => prev.map(input => 
+        input.id === targetId
+          ? {
+              ...input,
+              username: selectedUser.username,
+              validation: {
+                isValidating: false,
+                isValid: true,
+                profile: {
+                  username: selectedUser.username,
+                  avatarUrl: selectedUser.avatarUrl,
+                },
+                error: null,
+              },
+            }
+          : input
+      ));
+    } else {
+      // No empty field, add a new user
+      if (userInputs.length < MAX_USERS) {
+        setUserInputs(prev => [...prev, {
+          id: `user-${nextId}`,
+          username: selectedUser.username,
+          validation: {
+            isValidating: false,
+            isValid: true,
+            profile: {
+              username: selectedUser.username,
+              avatarUrl: selectedUser.avatarUrl,
+            },
+            error: null,
+          },
+        }]);
+        setNextId(prev => prev + 1);
+      }
+    }
+  };
+
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const validUsers = userInputs.filter(u => u.validation.isValid === true);
@@ -279,6 +327,14 @@ export function WatchlistForm({
             <div className="error-message" role="alert">
               {input.validation.error}
             </div>
+          )}
+          {input.validation.isValid === true && input.validation.profile && (
+            <FollowingDropdown
+              username={input.username}
+              profile={input.validation.profile}
+              onSelectUser={(user) => handleSelectFollowingUser(user, input.id)}
+              disabled={isLoading}
+            />
           )}
         </div>
       ))}
