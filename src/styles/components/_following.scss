@@ -75,6 +75,20 @@
     
     .following-error {
       color: $error-color;
+      text-align: left;
+      
+      .error-message {
+        margin: 0 0 $spacing-xs 0;
+        font-weight: 500;
+      }
+      
+      .error-suggestion {
+        margin: 0;
+        color: $text-secondary;
+        font-size: 0.85rem;
+        font-style: italic;
+        opacity: 0.8;
+      }
     }
     
     .following-list {

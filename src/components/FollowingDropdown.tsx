@@ -14,7 +14,7 @@ export function FollowingDropdown({ username, onSelectUser, disabled }: Followin
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [following, setFollowing] = useState<FollowingUser[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
@@ -43,8 +43,8 @@ export function FollowingDropdown({ username, onSelectUser, disabled }: Followin
         const followingList = await fetchFollowing(username);
         setFollowing(followingList);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to load following list';
-        setError(errorMessage);
+        const error = err instanceof Error ? err : new Error('Failed to load following list');
+        setError(error);
         console.error('Error fetching following:', err);
       } finally {
         setIsLoading(false);
@@ -85,7 +85,10 @@ export function FollowingDropdown({ username, onSelectUser, disabled }: Followin
           
           {error && (
             <div className="following-error">
-              <p>{error}</p>
+              <p className="error-message">{error.message}</p>
+              {(error as any).suggestion && (
+                <p className="error-suggestion">{(error as any).suggestion}</p>
+              )}
             </div>
           )}
           

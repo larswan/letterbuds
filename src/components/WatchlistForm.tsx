@@ -110,6 +110,17 @@ export function WatchlistForm({
       return;
     }
 
+    // Check for duplicates first
+    const duplicateError = checkForDuplicates(trimmed, userId);
+    if (duplicateError) {
+      setUserInputs(prev => prev.map(input => 
+        input.id === userId 
+          ? { ...input, validation: { isValidating: false, isValid: false, profile: null, error: duplicateError } }
+          : input
+      ));
+      return;
+    }
+
     setUserInputs(prev => prev.map(input => 
       input.id === userId 
         ? { ...input, validation: { isValidating: true, isValid: null, profile: null, error: null } }
@@ -149,15 +160,86 @@ export function WatchlistForm({
     }
   };
 
+  const checkForDuplicates = (value: string, userId: string): string | null => {
+    const trimmedValue = value.trim().toLowerCase();
+    if (!trimmedValue) return null;
+    
+    const duplicate = userInputs.find(
+      u => u.id !== userId && u.username.trim().toLowerCase() === trimmedValue
+    );
+    
+    if (duplicate) {
+      return `${value.trim()} has already been added`;
+    }
+    return null;
+  };
+
   const handleUsernameChange = (value: string, userId: string) => {
     const input = userInputs.find(u => u.id === userId);
     if (!input) return;
 
     const previousValue = input.username;
+    const previousValueTrimmed = previousValue.trim().toLowerCase();
     
     setUserInputs(prev => prev.map(u => 
       u.id === userId ? { ...u, username: value } : u
     ));
+    
+    // Clear duplicate errors from other fields if they were duplicating the previous value
+    if (previousValueTrimmed) {
+      setUserInputs(prev => prev.map(u => {
+        if (u.id !== userId && 
+            u.validation.error?.includes('already been added') &&
+            u.username.trim().toLowerCase() === previousValueTrimmed) {
+          // Re-check this field for duplicates with the new value
+          const newDuplicateError = checkForDuplicates(u.username, u.id);
+          if (newDuplicateError) {
+            return {
+              ...u,
+              validation: {
+                ...u.validation,
+                error: newDuplicateError,
+                isValid: false
+              }
+            };
+          } else {
+            // No longer a duplicate, re-validate if it was valid before
+            if (u.validation.isValid === true) {
+              return u; // Keep it valid
+            }
+            return {
+              ...u,
+              validation: {
+                isValidating: false,
+                isValid: null,
+                profile: null,
+                error: null
+              }
+            };
+          }
+        }
+        return u;
+      }));
+    }
+    
+    // Check for duplicates
+    const duplicateError = checkForDuplicates(value, userId);
+    if (duplicateError) {
+      setUserInputs(prev => prev.map(u => 
+        u.id === userId 
+          ? { 
+              ...u, 
+              validation: { 
+                isValidating: false, 
+                isValid: false, 
+                profile: null, 
+                error: duplicateError 
+              } 
+            }
+          : u
+      ));
+      return;
+    }
     
     // Check if this looks like a selection from datalist
     const trimmedValue = value.trim();
@@ -170,8 +252,8 @@ export function WatchlistForm({
         validateUsername(trimmedValue, userId);
       }, 100);
     } else {
-      // Reset validation when user types manually
-      if (input.validation.isValid !== null) {
+      // Reset validation when user types manually (but keep duplicate errors)
+      if (input.validation.isValid !== null && !input.validation.error?.includes('already been added')) {
         setUserInputs(prev => prev.map(u => 
           u.id === userId 
             ? { ...u, validation: { isValidating: false, isValid: null, profile: null, error: null } }
@@ -247,6 +329,20 @@ export function WatchlistForm({
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    // Check for duplicates before submitting
+    const usernames = userInputs.map(u => u.username.trim().toLowerCase()).filter(u => u);
+    const uniqueUsernames = new Set(usernames);
+    if (usernames.length !== uniqueUsernames.size) {
+      // There are duplicates, validate all fields to show errors
+      userInputs.forEach(input => {
+        if (input.username.trim()) {
+          validateUsername(input.username, input.id);
+        }
+      });
+      return;
+    }
+    
     const validUsers = userInputs.filter(u => u.validation.isValid === true);
     if (validUsers.length >= 2) {
       validUsers.forEach(u => saveUsername(u.username.trim()));

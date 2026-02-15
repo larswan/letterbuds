@@ -5,6 +5,42 @@ import { Film, UserProfile, FollowingUser } from '../types';
 // In production: Express server handles /api directly
 const API_BASE_URL = '/api';
 
+/**
+ * Parse following users from Letterboxd HTML
+ */
+function parseFollowingHTML(html: string): FollowingUser[] {
+  const followingUsers: FollowingUser[] = [];
+  
+  // Match table rows containing person-summary divs
+  const rowMatches = html.match(/<tr[^>]*>[\s\S]*?<td[^>]*class="[^"]*col-member[^"]*"[^>]*>[\s\S]*?<div[^>]*class="[^"]*person-summary[^"]*"[\s\S]*?<\/tr>/g);
+  
+  if (rowMatches) {
+    for (const row of rowMatches) {
+      // Extract avatar URL and username from avatar link
+      const avatarMatch = row.match(/<a[^>]*class="[^"]*avatar[^"]*"[^>]*href="\/([^\/"]+)\/"[^>]*>[\s\S]*?<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"[^>]*>/);
+      
+      // Extract username and display name from name link
+      const nameMatch = row.match(/<a[^>]*href="\/([^\/"]+)\/"[^>]*class="[^"]*name[^"]*"[^>]*>[\s\S]*?([^<]+)<\/a>/);
+      
+      if (avatarMatch || nameMatch) {
+        const username = (nameMatch?.[1] || avatarMatch?.[1] || '').trim();
+        const avatarUrl = avatarMatch?.[2]?.trim() || null;
+        const displayName = (nameMatch?.[2]?.trim() || avatarMatch?.[3]?.trim() || username).trim();
+        
+        if (username) {
+          followingUsers.push({
+            username,
+            avatarUrl: avatarUrl || null,
+            displayName: displayName && displayName !== username ? displayName : undefined,
+          });
+        }
+      }
+    }
+  }
+  
+  return followingUsers;
+}
+
 export async function fetchWatchlist(username: string): Promise<Film[]> {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] [FETCH] Fetching watchlist for ${username}...`);
@@ -150,6 +186,31 @@ export async function fetchFollowing(username: string): Promise<FollowingUser[]>
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] [FETCH] Fetching following list for ${username}...`);
 
+  // Try direct browser fetch first (uses user's browser context, cookies, etc.)
+  // This may bypass Letterboxd's anti-scraping if the user is logged in
+  const directUrl = `https://letterboxd.com/${username}/following/`;
+  
+  try {
+    console.log(`[${timestamp}] [FETCH] Attempting direct browser fetch from ${directUrl}...`);
+    const directResponse = await fetch(directUrl, {
+      method: 'GET',
+      credentials: 'include', // Include cookies if user is logged into Letterboxd
+      mode: 'cors', // Try CORS first
+    });
+    
+    if (directResponse.ok) {
+      const html = await directResponse.text();
+      const following = parseFollowingHTML(html);
+      console.log(`[${new Date().toISOString()}] [SUCCESS] Retrieved ${following.length} following users via direct browser fetch`);
+      return following;
+    }
+  } catch (corsError) {
+    // CORS blocked - fall back to server proxy
+    console.log(`[${timestamp}] [FETCH] Direct fetch blocked by CORS, falling back to server proxy...`);
+  }
+
+  // Fall back to server proxy
+  let serverError: Error | null = null;
   try {
     const url = `${API_BASE_URL}/following/${username}`;
     const response = await fetch(url);
@@ -167,6 +228,15 @@ export async function fetchFollowing(username: string): Promise<FollowingUser[]>
         throw new Error(`User "${username}" not found or following list is empty`);
       }
       
+      if (response.status === 403) {
+        const errorMsg = errorData?.error || 'Access forbidden. Letterboxd may be blocking automated requests.';
+        const suggestion = errorData?.suggestion || 'You can still manually add usernames to compare watchlists.';
+        console.error(`[${timestamp}] [ERROR] Access forbidden for ${username}:`, errorMsg);
+        const fullError = new Error(errorMsg);
+        (fullError as any).suggestion = suggestion;
+        throw fullError;
+      }
+      
       const errorMsg = errorData?.error || `Failed to fetch following list: ${response.status} ${response.statusText}`;
       throw new Error(errorMsg);
     }
@@ -178,9 +248,34 @@ export async function fetchFollowing(username: string): Promise<FollowingUser[]>
     
     return following;
   } catch (error) {
-    const timestamp = new Date().toISOString();
-    console.error(`[${timestamp}] [ERROR] Error fetching following for ${username}:`, error);
-    throw error;
+    serverError = error instanceof Error ? error : new Error(String(error));
+    console.log(`[${timestamp}] [FETCH] Server proxy failed, trying CORS proxy as last resort...`);
+    
+    // Last resort: Try a public CORS proxy
+    // Note: These services may have rate limits or be unreliable
+    try {
+      const corsProxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(directUrl)}`;
+      console.log(`[${timestamp}] [FETCH] Attempting CORS proxy fetch...`);
+      
+      const proxyResponse = await fetch(corsProxyUrl, {
+        method: 'GET',
+        mode: 'cors',
+      });
+      
+      if (proxyResponse.ok) {
+        const html = await proxyResponse.text();
+        const following = parseFollowingHTML(html);
+        console.log(`[${new Date().toISOString()}] [SUCCESS] Retrieved ${following.length} following users via CORS proxy`);
+        return following;
+      } else {
+        throw new Error(`CORS proxy returned ${proxyResponse.status}`);
+      }
+    } catch (proxyError) {
+      // All methods failed - throw the original server error
+      const timestamp = new Date().toISOString();
+      console.error(`[${timestamp}] [ERROR] All fetch methods failed for ${username}`);
+      throw serverError;
+    }
   }
 }
 

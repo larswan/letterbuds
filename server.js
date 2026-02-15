@@ -20,62 +20,110 @@ app.get('/api/following/:username', async (req, res) => {
   
   console.log(`[${new Date().toISOString()}] [PROXY] Fetching following list for ${username} from ${followingUrl}`);
   
-  try {
-    const response = await fetch(followingUrl, {
-      headers: {
-        'User-Agent': 'curl/7.68.0',
-      },
-    });
-    
-    if (!response.ok) {
-      console.error(`[${new Date().toISOString()}] [PROXY] Error fetching following: ${response.status} ${response.statusText}`);
-      return res.status(response.status).json({ 
-        error: `Failed to fetch following list: ${response.status} ${response.statusText}` 
-      });
+  // Retry logic for rate limiting/blocking
+  const maxRetries = 2;
+  let lastError = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0) {
+      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+      console.log(`[${new Date().toISOString()}] [PROXY] Retrying following fetch in ${delay}ms (attempt ${attempt + 1}/${maxRetries + 1})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
-    
-    const html = await response.text();
-    
-    // Parse HTML to extract following users
-    // Pattern: <tr> with table-person, contains avatar link and name link
-    const followingUsers = [];
-    
-    // Match table rows containing person-summary divs
-    const rowMatches = html.match(/<tr[^>]*>[\s\S]*?<td[^>]*class="[^"]*col-member[^"]*"[^>]*>[\s\S]*?<div[^>]*class="[^"]*person-summary[^"]*"[\s\S]*?<\/tr>/g);
-    
-    if (rowMatches) {
-      for (const row of rowMatches) {
-        // Extract avatar URL and username from avatar link
-        const avatarMatch = row.match(/<a[^>]*class="[^"]*avatar[^"]*"[^>]*href="\/([^\/"]+)\/"[^>]*>[\s\S]*?<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"[^>]*>/);
+  
+    try {
+      // Try different User-Agent strategies
+      const userAgents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'curl/7.68.0',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      ];
+      
+      // Use same headers as profile endpoint (which works)
+      const response = await fetch(followingUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+        },
+      });
+      
+      console.log(`[${new Date().toISOString()}] [PROXY] Response status: ${response.status} ${response.statusText}`);
+      
+      if (!response.ok) {
+        // Retry on 403, 429, or 503
+        if ((response.status === 403 || response.status === 429 || response.status === 503) && attempt < maxRetries) {
+          lastError = { status: response.status, text: response.statusText };
+          continue; // Retry
+        }
         
-        // Extract username and display name from name link
-        const nameMatch = row.match(/<a[^>]*href="\/([^\/"]+)\/"[^>]*class="[^"]*name[^"]*"[^>]*>[\s\S]*?([^<]+)<\/a>/);
+        console.error(`[${new Date().toISOString()}] [PROXY] Error fetching following: ${response.status} ${response.statusText}`);
         
-        if (avatarMatch || nameMatch) {
-          const username = (nameMatch?.[1] || avatarMatch?.[1] || '').trim();
-          const avatarUrl = avatarMatch?.[2]?.trim() || null;
-          const displayName = (nameMatch?.[2]?.trim() || avatarMatch?.[3]?.trim() || username).trim();
+        if (response.status === 403) {
+          return res.status(403).json({ 
+            error: 'Access forbidden. Letterboxd may be blocking automated requests to this page.',
+            suggestion: 'This feature may not work for all users due to Letterboxd\'s anti-scraping measures.'
+          });
+        }
+        
+        return res.status(response.status).json({ 
+          error: `Failed to fetch following list: ${response.status} ${response.statusText}` 
+        });
+      }
+    
+      const html = await response.text();
+      
+      // Parse HTML to extract following users
+      // Pattern: <tr> with table-person, contains avatar link and name link
+      const followingUsers = [];
+      
+      // Match table rows containing person-summary divs
+      const rowMatches = html.match(/<tr[^>]*>[\s\S]*?<td[^>]*class="[^"]*col-member[^"]*"[^>]*>[\s\S]*?<div[^>]*class="[^"]*person-summary[^"]*"[\s\S]*?<\/tr>/g);
+      
+      if (rowMatches) {
+        for (const row of rowMatches) {
+          // Extract avatar URL and username from avatar link
+          const avatarMatch = row.match(/<a[^>]*class="[^"]*avatar[^"]*"[^>]*href="\/([^\/"]+)\/"[^>]*>[\s\S]*?<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"[^>]*>/);
           
-          if (username) {
-            followingUsers.push({
-              username,
-              avatarUrl: avatarUrl || null,
-              displayName: displayName && displayName !== username ? displayName : undefined,
-            });
+          // Extract username and display name from name link
+          const nameMatch = row.match(/<a[^>]*href="\/([^\/"]+)\/"[^>]*class="[^"]*name[^"]*"[^>]*>[\s\S]*?([^<]+)<\/a>/);
+          
+          if (avatarMatch || nameMatch) {
+            const username = (nameMatch?.[1] || avatarMatch?.[1] || '').trim();
+            const avatarUrl = avatarMatch?.[2]?.trim() || null;
+            const displayName = (nameMatch?.[2]?.trim() || avatarMatch?.[3]?.trim() || username).trim();
+            
+            if (username) {
+              followingUsers.push({
+                username,
+                avatarUrl: avatarUrl || null,
+                displayName: displayName && displayName !== username ? displayName : undefined,
+              });
+            }
           }
         }
       }
+      
+      console.log(`[${new Date().toISOString()}] [PROXY] Successfully parsed ${followingUsers.length} following users for ${username}`);
+      return res.json({ following: followingUsers });
+      
+    } catch (error) {
+      lastError = error;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`[${new Date().toISOString()}] [PROXY] Error on attempt ${attempt + 1}:`, errorMessage);
+      
+      // Don't retry on the last attempt
+      if (attempt === maxRetries) {
+        const errorStack = error instanceof Error ? error.stack : undefined;
+        if (errorStack) {
+          console.error(`[${new Date().toISOString()}] [PROXY] Error stack:`, errorStack);
+        }
+        return res.status(500).json({ 
+          error: 'Failed to fetch following list after retries',
+          message: errorMessage
+        });
+      }
     }
-    
-    console.log(`[${new Date().toISOString()}] [PROXY] Successfully parsed ${followingUsers.length} following users for ${username}`);
-    res.json({ following: followingUsers });
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error(`[${new Date().toISOString()}] [PROXY] Error fetching following:`, errorMessage);
-    res.status(500).json({ 
-      error: 'Failed to fetch following list',
-      message: errorMessage
-    });
   }
 });
 
