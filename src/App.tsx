@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { WatchlistForm } from './components/WatchlistForm';
 import { MatchResults } from './components/MatchResults';
 import { LoadingSpinner } from './components/LoadingSpinner';
-import { fetchWatchlist, fetchUserProfile } from './services/letterboxdService';
+import { fetchWatchlist, fetchUserProfile, fetchFollowing } from './services/letterboxdService';
 import { findCommonFilmsMultiUser } from './services/matchService';
 import { MultiUserMatchResult, UserProfile } from './types';
 import './styles/main.scss';
@@ -13,6 +13,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [usernames, setUsernames] = useState<string[]>([]);
   const [profiles, setProfiles] = useState<(UserProfile | null)[]>([]);
+  const [followingFeatureEnabled, setFollowingFeatureEnabled] = useState<boolean | null>(null); // null = testing, true/false = result
 
   const handleSubmit = async (usernamesArray: string[]) => {
     setIsLoading(true);
@@ -92,11 +93,62 @@ function App() {
     // Keep usernames and profiles so they're preserved in the form
   };
 
+  // Test if following scraper works on app load
+  useEffect(() => {
+    const testFollowingScraper = async () => {
+      const testUsernames = ['jstoobs', 'larswan'];
+      console.log(`[${new Date().toISOString()}] [TEST] Testing following scraper with usernames: ${testUsernames.join(', ')}`);
+      
+      let successCount = 0;
+      
+      for (const username of testUsernames) {
+        try {
+          // Try to fetch following list with a timeout
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), 10000)
+          );
+          
+          const fetchPromise = fetchFollowing(username);
+          await Promise.race([fetchPromise, timeoutPromise]);
+          
+          // If we get here, it worked
+          successCount++;
+          console.log(`[${new Date().toISOString()}] [TEST] ✓ Following scraper works for ${username}`);
+          
+          // If at least one works, enable the feature
+          if (successCount >= 1) {
+            setFollowingFeatureEnabled(true);
+            console.log(`[${new Date().toISOString()}] [TEST] ✓ Following feature enabled (${successCount}/${testUsernames.length} tests passed)`);
+            return; // Early exit if we get one success
+          }
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : String(err);
+          console.log(`[${new Date().toISOString()}] [TEST] ✗ Following scraper failed for ${username}: ${errorMsg}`);
+        }
+      }
+      
+      // If we get here, all tests failed
+      if (successCount === 0) {
+        setFollowingFeatureEnabled(false);
+        console.log(`[${new Date().toISOString()}] [TEST] ✗ Following feature disabled (0/${testUsernames.length} tests passed)`);
+      }
+    };
+    
+    // Run test in background (don't block UI)
+    testFollowingScraper();
+  }, []);
+
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Letterboxd Buddy</h1>
-        <p className="subtitle">Find common films in watchlists</p>
+        <div className="header-content">
+          <img 
+            src="/letterboxd-dots-neg-tight.png" 
+            alt="Letterboxd" 
+            className="letterboxd-logo"
+          />
+          <h1>Letterbuds</h1>
+        </div>
       </header>
 
       <main className="app-main">
@@ -115,6 +167,7 @@ function App() {
             isLoading={isLoading}
             initialUsernames={usernames}
             initialProfiles={profiles}
+            followingFeatureEnabled={followingFeatureEnabled}
           />
         )}
 

@@ -48,7 +48,13 @@
     .user-summary {
       display: flex;
       align-items: center;
-      gap: $spacing-sm;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: $spacing-md;
+      
+      &:last-child {
+        margin-bottom: 0;
+      }
       
       .user-avatar {
         width: 32px;
@@ -56,6 +62,34 @@
         border-radius: 50%;
         object-fit: cover;
         flex-shrink: 0;
+      }
+      
+      .user-summary-content {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex: 1;
+        gap: $spacing-sm;
+        
+        strong {
+          color: $text-primary;
+        }
+        
+        .user-count {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 0.25rem;
+          
+          .number {
+            line-height: 1;
+          }
+          
+          .count-label {
+            color: $text-secondary;
+            font-size: 0.9rem;
+          }
+        }
       }
     }
     

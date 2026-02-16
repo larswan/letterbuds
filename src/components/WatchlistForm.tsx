@@ -10,6 +10,7 @@ interface WatchlistFormProps {
   isLoading: boolean;
   initialUsernames?: string[];
   initialProfiles?: (UserProfile | null)[];
+  followingFeatureEnabled?: boolean | null; // null = testing, true/false = result
 }
 
 interface UserInput {
@@ -60,6 +61,7 @@ export function WatchlistForm({
   isLoading,
   initialUsernames = [],
   initialProfiles = [],
+  followingFeatureEnabled = null,
 }: WatchlistFormProps) {
   const [userInputs, setUserInputs] = useState<UserInput[]>(() => {
     // Initialize with at least 2 users, or use initial values
@@ -361,12 +363,12 @@ export function WatchlistForm({
       clearTimeout(existingTimer);
     }
     
-    // Set up debounced validation (2 seconds after user stops typing)
+    // Set up debounced validation (0.5 seconds after user stops typing)
     if (trimmedValue) {
       const timer = setTimeout(() => {
         validateUsername(trimmedValue, userId, true);
         debounceTimers.current.delete(userId);
-      }, 2000);
+      }, 500); // 0.5 seconds debounce
       
       debounceTimers.current.set(userId, timer);
     } else {
@@ -604,7 +606,7 @@ export function WatchlistForm({
               {input.validation.error}
             </div>
           )}
-          {input.validation.isValid === true && input.validation.profile && (
+          {input.validation.isValid === true && input.validation.profile && followingFeatureEnabled === true && (
             <FollowingDropdown
               username={input.username}
               profile={input.validation.profile}

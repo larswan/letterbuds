@@ -9,18 +9,38 @@ const API_BASE_URL = '/api';
  * Parse following users from Letterboxd HTML
  */
 function parseFollowingHTML(html: string): FollowingUser[] {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] [PARSE] Parsing following HTML, length: ${html.length} characters`);
+  
   const followingUsers: FollowingUser[] = [];
+  
+  // Check if HTML contains expected markers
+  const hasPersonSummary = html.includes('person-summary');
+  const hasColMember = html.includes('col-member');
+  const hasTablePerson = html.includes('table-person');
+  
+  console.log(`[${timestamp}] [PARSE] HTML markers - person-summary: ${hasPersonSummary}, col-member: ${hasColMember}, table-person: ${hasTablePerson}`);
+  
+  if (!hasPersonSummary && !hasColMember) {
+    console.warn(`[${timestamp}] [PARSE] Warning: HTML doesn't contain expected markers. First 500 chars:`, html.substring(0, 500));
+  }
   
   // Match table rows containing person-summary divs
   const rowMatches = html.match(/<tr[^>]*>[\s\S]*?<td[^>]*class="[^"]*col-member[^"]*"[^>]*>[\s\S]*?<div[^>]*class="[^"]*person-summary[^"]*"[\s\S]*?<\/tr>/g);
   
+  console.log(`[${timestamp}] [PARSE] Found ${rowMatches ? rowMatches.length : 0} row matches using regex`);
+  
   if (rowMatches) {
-    for (const row of rowMatches) {
+    for (let i = 0; i < rowMatches.length; i++) {
+      const row = rowMatches[i];
+      
       // Extract avatar URL and username from avatar link
       const avatarMatch = row.match(/<a[^>]*class="[^"]*avatar[^"]*"[^>]*href="\/([^\/"]+)\/"[^>]*>[\s\S]*?<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"[^>]*>/);
       
       // Extract username and display name from name link
       const nameMatch = row.match(/<a[^>]*href="\/([^\/"]+)\/"[^>]*class="[^"]*name[^"]*"[^>]*>[\s\S]*?([^<]+)<\/a>/);
+      
+      console.log(`[${timestamp}] [PARSE] Row ${i}: avatarMatch: ${!!avatarMatch}, nameMatch: ${!!nameMatch}`);
       
       if (avatarMatch || nameMatch) {
         const username = (nameMatch?.[1] || avatarMatch?.[1] || '').trim();
@@ -28,16 +48,28 @@ function parseFollowingHTML(html: string): FollowingUser[] {
         const displayName = (nameMatch?.[2]?.trim() || avatarMatch?.[3]?.trim() || username).trim();
         
         if (username) {
+          console.log(`[${timestamp}] [PARSE] Row ${i}: Extracted user - username: ${username}, displayName: ${displayName}, avatarUrl: ${avatarUrl ? 'present' : 'missing'}`);
           followingUsers.push({
             username,
             avatarUrl: avatarUrl || null,
             displayName: displayName && displayName !== username ? displayName : undefined,
           });
+        } else {
+          console.warn(`[${timestamp}] [PARSE] Row ${i}: Could not extract username. avatarMatch:`, avatarMatch, 'nameMatch:', nameMatch);
         }
+      } else {
+        console.warn(`[${timestamp}] [PARSE] Row ${i}: No matches found. Row sample (first 200 chars):`, row.substring(0, 200));
       }
     }
+  } else {
+    console.warn(`[${timestamp}] [PARSE] No row matches found. Trying alternative patterns...`);
+    
+    // Try alternative: look for person-summary divs directly
+    const personSummaryMatches = html.match(/<div[^>]*class="[^"]*person-summary[^"]*"[\s\S]*?<\/div>/g);
+    console.log(`[${timestamp}] [PARSE] Alternative: Found ${personSummaryMatches ? personSummaryMatches.length : 0} person-summary divs`);
   }
   
+  console.log(`[${timestamp}] [PARSE] Final result: ${followingUsers.length} users parsed`);
   return followingUsers;
 }
 
@@ -198,22 +230,31 @@ export async function fetchFollowing(username: string): Promise<FollowingUser[]>
       mode: 'cors', // Try CORS first
     });
     
+    console.log(`[${timestamp}] [FETCH] Direct fetch response status: ${directResponse.status} ${directResponse.statusText}`);
+    
     if (directResponse.ok) {
       const html = await directResponse.text();
+      console.log(`[${timestamp}] [FETCH] Direct fetch HTML length: ${html.length} characters`);
       const following = parseFollowingHTML(html);
       console.log(`[${new Date().toISOString()}] [SUCCESS] Retrieved ${following.length} following users via direct browser fetch`);
       return following;
+    } else {
+      console.log(`[${timestamp}] [FETCH] Direct fetch failed with status ${directResponse.status}, falling back to server proxy...`);
     }
   } catch (corsError) {
     // CORS blocked - fall back to server proxy
-    console.log(`[${timestamp}] [FETCH] Direct fetch blocked by CORS, falling back to server proxy...`);
+    const errorMsg = corsError instanceof Error ? corsError.message : String(corsError);
+    console.log(`[${timestamp}] [FETCH] Direct fetch blocked by CORS: ${errorMsg}, falling back to server proxy...`);
   }
 
   // Fall back to server proxy
   let serverError: Error | null = null;
   try {
     const url = `${API_BASE_URL}/following/${username}`;
+    console.log(`[${timestamp}] [FETCH] Fetching from server proxy: ${url}`);
     const response = await fetch(url);
+    
+    console.log(`[${timestamp}] [FETCH] Server proxy response status: ${response.status} ${response.statusText}`);
 
     if (!response.ok) {
       let errorData: any = null;
@@ -242,7 +283,17 @@ export async function fetchFollowing(username: string): Promise<FollowingUser[]>
     }
 
     const data = await response.json();
+    console.log(`[${timestamp}] [FETCH] Server proxy response data:`, {
+      hasFollowing: !!data.following,
+      followingLength: data.following ? data.following.length : 0,
+      dataKeys: Object.keys(data)
+    });
+    
     const following = data.following || [];
+    
+    if (following.length === 0) {
+      console.warn(`[${timestamp}] [FETCH] Warning: Server returned empty following array. Response data:`, data);
+    }
     
     console.log(`[${new Date().toISOString()}] [SUCCESS] Retrieved ${following.length} following users for ${username}`);
     

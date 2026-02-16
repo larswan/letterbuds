@@ -289,12 +289,12 @@
   .match-button {
     @include button-base;
     width: 100%;
-    background-color: $accent-primary;
-    color: $bg-primary;
+    background-color: #ee7000;
+    color: white;
     margin-top: $spacing-md;
     
     &:not(:disabled):hover {
-      background-color: color.adjust($accent-primary, $lightness: 5%);
+      background-color: color.adjust(#ee7000, $lightness: 5%);
     }
     
     &:disabled {

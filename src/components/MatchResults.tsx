@@ -46,7 +46,7 @@ export function MatchResults({ result, usernames, profiles, onReset }: MatchResu
           const profile = profileMap.get(username);
           const count = userWatchlistCounts[username] || 0;
           return (
-            <p key={username} className="user-summary">
+            <div key={username} className="user-summary">
               {profile?.avatarUrl && (
                 <img 
                   src={profile.avatarUrl} 
@@ -57,8 +57,14 @@ export function MatchResults({ result, usernames, profiles, onReset }: MatchResu
                   }}
                 />
               )}
-              <strong>{username}</strong> has <strong>{count}</strong> films in watchlist
-            </p>
+              <div className="user-summary-content">
+                <strong>{username}</strong>
+                <div className="user-count">
+                  <span className="number">{count}</span>
+                  <span className="count-label">films in watchlist</span>
+                </div>
+              </div>
+            </div>
           );
         })}
       </div>
@@ -91,7 +97,7 @@ export function MatchResults({ result, usernames, profiles, onReset }: MatchResu
                   return (
                     <div key={groupIndex} className="user-group">
                       <h3 className="group-heading">
-                        {group.filmCount} {group.filmCount === 1 ? 'film' : 'films'} in common
+                        <span className="number">{group.filmCount}</span> {group.filmCount === 1 ? 'film' : 'films'} in common
                       </h3>
                       <h4 className="group-subheading">{userNames}</h4>
                       <div className="films-list">

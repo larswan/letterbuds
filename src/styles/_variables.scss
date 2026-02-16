@@ -1,6 +1,7 @@
 // Colors
-$bg-primary: #1a1a1a;
+$bg-primary: #21272D; // App background color
 $bg-secondary: #2a2a2a;
+$bg-header: #14171B; // Header background color
 $text-primary: #ffffff;
 $text-secondary: #e0e0e0;
 $text-muted: #999999;
@@ -34,4 +35,8 @@ $container-padding: $spacing-md;
 // Border radius
 $border-radius: 8px;
 $border-radius-lg: 12px;
+
+// Font stacks
+// Note: TiemposTextWeb is a commercial font, so Lora (with consistent number heights) is used
+$font-stack-tiempos-text: "Lora", "Georgia", serif, "ColorEmoji";
 

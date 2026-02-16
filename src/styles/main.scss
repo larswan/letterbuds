@@ -29,27 +29,38 @@ body {
   flex-direction: column;
   
   .app-header {
-    padding: $spacing-lg $container-padding;
-    text-align: center;
-    background-color: $bg-secondary;
+    height: 72px;
+    padding: 0 $container-padding;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: $bg-header;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     
-    h1 {
-      font-size: 2rem;
-      margin-bottom: $spacing-xs;
-      color: $text-primary;
+    .header-content {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      max-width: 950px;
+      width: 100%;
       
-      @include tablet {
-        font-size: 2.5rem;
+      .letterboxd-logo {
+        width: auto;
+        height: 24px;
+        flex-shrink: 0;
       }
-    }
-    
-    .subtitle {
-      color: $text-secondary;
-      font-size: 1rem;
       
-      @include tablet {
-        font-size: 1.1rem;
+      h1 {
+        font-family: "Proxima Nova", "Graphik", "Montserrat", "Inter", system-ui, sans-serif;
+        font-weight: 900;
+        letter-spacing: -0.035em;
+        font-size: 1.5rem;
+        margin: 0;
+        color: $text-primary;
+        
+        @include tablet {
+          font-size: 1.75rem;
+        }
       }
     }
   }
@@ -84,5 +95,14 @@ body {
       background-color: color.adjust($error-color, $lightness: -10%);
     }
   }
+}
+
+// Number styling for prominent numbers (watchlist counts, common film counts)
+.number {
+  font-size: 1.3125rem;
+  font-family: $font-stack-tiempos-text;
+  font-weight: 800;
+  color: #d8e0e8;
+  font-variant-numeric: lining-nums; // Ensures consistent number heights
 }
 

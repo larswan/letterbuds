@@ -21,90 +21,241 @@ app.get('/api/following/:username', async (req, res) => {
   console.log(`[${new Date().toISOString()}] [PROXY] Fetching following list for ${username} from ${followingUrl}`);
   
   // Retry logic for rate limiting/blocking
-  const maxRetries = 2;
+  // Increased retries and longer delays to avoid Cloudflare detection
+  const maxRetries = 3;
   let lastError = null;
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (attempt > 0) {
-      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+      // Longer delays with exponential backoff to avoid pattern detection
+      const baseDelay = Math.min(2000 * Math.pow(2, attempt - 1), 10000);
+      const jitter = Math.floor(Math.random() * 1000); // Add randomness
+      const delay = baseDelay + jitter;
       console.log(`[${new Date().toISOString()}] [PROXY] Retrying following fetch in ${delay}ms (attempt ${attempt + 1}/${maxRetries + 1})`);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   
     try {
-      // Try different User-Agent strategies
+      // Add a small random delay before each request to avoid rate limiting patterns
+      if (attempt > 0) {
+        const randomDelay = Math.floor(Math.random() * 1000) + 500; // 500-1500ms
+        console.log(`[${new Date().toISOString()}] [PROXY] Adding random delay: ${randomDelay}ms`);
+        await new Promise(resolve => setTimeout(resolve, randomDelay));
+      }
+      
+      // Use more realistic browser headers to avoid detection
+      // Rotate through different User-Agents to avoid pattern detection
       const userAgents = [
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'curl/7.68.0',
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       ];
       
-      // Use same headers as profile endpoint (which works)
+      // Use different user agent each attempt, with some randomization
+      const userAgentIndex = (attempt + Math.floor(Math.random() * userAgents.length)) % userAgents.length;
+      const userAgent = userAgents[userAgentIndex];
+      
+      // Use comprehensive browser headers (same as profile endpoint but with Referer)
+      // Remove some headers that might flag us as automated
+      const headers = {
+        'User-Agent': userAgent,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Referer': `https://letterboxd.com/${username}/`,
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+      };
+      
+      // Only add Sec-Fetch headers if not on first attempt (they might flag us)
+      if (attempt > 0) {
+        headers['Sec-Fetch-Dest'] = 'document';
+        headers['Sec-Fetch-Mode'] = 'navigate';
+        headers['Sec-Fetch-Site'] = 'same-origin';
+        headers['Sec-Fetch-User'] = '?1';
+      }
+      
+      console.log(`[${new Date().toISOString()}] [PROXY] Attempt ${attempt + 1}: Fetching with User-Agent: ${userAgent.substring(0, 50)}...`);
+      
       const response = await fetch(followingUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-        },
+        headers,
+        redirect: 'follow',
       });
       
       console.log(`[${new Date().toISOString()}] [PROXY] Response status: ${response.status} ${response.statusText}`);
+      console.log(`[${new Date().toISOString()}] [PROXY] Response headers:`, {
+        'content-type': response.headers.get('content-type'),
+        'content-length': response.headers.get('content-length'),
+        'x-frame-options': response.headers.get('x-frame-options'),
+      });
       
       if (!response.ok) {
+        // Try to read response body for debugging (even on error)
+        let errorBody = '';
+        try {
+          errorBody = await response.text();
+          console.log(`[${new Date().toISOString()}] [PROXY] Error response body (first 500 chars):`, errorBody.substring(0, 500));
+        } catch (e) {
+          console.log(`[${new Date().toISOString()}] [PROXY] Could not read error response body`);
+        }
+        
         // Retry on 403, 429, or 503
         if ((response.status === 403 || response.status === 429 || response.status === 503) && attempt < maxRetries) {
-          lastError = { status: response.status, text: response.statusText };
+          lastError = { status: response.status, text: response.statusText, body: errorBody.substring(0, 200) };
+          console.log(`[${new Date().toISOString()}] [PROXY] Will retry after delay. Error: ${response.status} ${response.statusText}`);
           continue; // Retry
         }
         
         console.error(`[${new Date().toISOString()}] [PROXY] Error fetching following: ${response.status} ${response.statusText}`);
+        console.error(`[${new Date().toISOString()}] [PROXY] Error details:`, {
+          status: response.status,
+          statusText: response.statusText,
+          url: followingUrl,
+          attempt: attempt + 1,
+          errorBodyPreview: errorBody.substring(0, 200),
+        });
         
         if (response.status === 403) {
+          // Check if it's a Cloudflare challenge or similar
+          const isCloudflare = errorBody.includes('challenge') || errorBody.includes('cf-') || errorBody.includes('cloudflare');
+          const errorMsg = isCloudflare 
+            ? 'Access blocked by Cloudflare protection. Letterboxd is using anti-bot measures.'
+            : 'Access forbidden. Letterboxd may be blocking automated requests to this page.';
+          
           return res.status(403).json({ 
-            error: 'Access forbidden. Letterboxd may be blocking automated requests to this page.',
-            suggestion: 'This feature may not work for all users due to Letterboxd\'s anti-scraping measures.'
+            error: errorMsg,
+            suggestion: 'This feature may not work reliably due to Letterboxd\'s anti-scraping measures. You can still manually add usernames to compare watchlists.',
+            details: isCloudflare ? 'Cloudflare protection detected' : '403 Forbidden response'
           });
         }
         
         return res.status(response.status).json({ 
-          error: `Failed to fetch following list: ${response.status} ${response.statusText}` 
+          error: `Failed to fetch following list: ${response.status} ${response.statusText}`,
+          details: errorBody.substring(0, 200)
         });
       }
     
       const html = await response.text();
+      console.log(`[${new Date().toISOString()}] [PROXY] Received HTML response, length: ${html.length} characters`);
       
-      // Parse HTML to extract following users
-      // Pattern: <tr> with table-person, contains avatar link and name link
-      const followingUsers = [];
+      // Check if this is actually a following page (not an error page)
+      const hasFollowingContent = html.includes('person-summary') || html.includes('col-member') || html.includes('table-person');
+      console.log(`[${new Date().toISOString()}] [PROXY] HTML contains following page markers: ${hasFollowingContent}`);
       
-      // Match table rows containing person-summary divs
-      const rowMatches = html.match(/<tr[^>]*>[\s\S]*?<td[^>]*class="[^"]*col-member[^"]*"[^>]*>[\s\S]*?<div[^>]*class="[^"]*person-summary[^"]*"[\s\S]*?<\/tr>/g);
-      
-      if (rowMatches) {
-        for (const row of rowMatches) {
-          // Extract avatar URL and username from avatar link
-          const avatarMatch = row.match(/<a[^>]*class="[^"]*avatar[^"]*"[^>]*href="\/([^\/"]+)\/"[^>]*>[\s\S]*?<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"[^>]*>/);
-          
-          // Extract username and display name from name link
-          const nameMatch = row.match(/<a[^>]*href="\/([^\/"]+)\/"[^>]*class="[^"]*name[^"]*"[^>]*>[\s\S]*?([^<]+)<\/a>/);
-          
-          if (avatarMatch || nameMatch) {
-            const username = (nameMatch?.[1] || avatarMatch?.[1] || '').trim();
-            const avatarUrl = avatarMatch?.[2]?.trim() || null;
-            const displayName = (nameMatch?.[2]?.trim() || avatarMatch?.[3]?.trim() || username).trim();
-            
-            if (username) {
-              followingUsers.push({
-                username,
-                avatarUrl: avatarUrl || null,
-                displayName: displayName && displayName !== username ? displayName : undefined,
-              });
-            }
-          }
-        }
+      if (!hasFollowingContent) {
+        console.warn(`[${new Date().toISOString()}] [PROXY] Warning: HTML doesn't appear to be a following page. First 500 chars:`, html.substring(0, 500));
+        return res.status(404).json({ 
+          error: 'Following page not found or has unexpected structure',
+          username
+        });
       }
       
-      console.log(`[${new Date().toISOString()}] [PROXY] Successfully parsed ${followingUsers.length} following users for ${username}`);
+      // Use cheerio to parse HTML (more reliable than regex)
+      const $ = load(html);
+      const followingUsers = [];
+      
+      console.log(`[${new Date().toISOString()}] [PROXY] Parsing HTML with cheerio...`);
+      
+      // Try multiple selectors to find person rows
+      let personRows = $('td.col-member.table-person');
+      console.log(`[${new Date().toISOString()}] [PROXY] Selector 'td.col-member.table-person': Found ${personRows.length} rows`);
+      
+      if (personRows.length === 0) {
+        personRows = $('td.col-member');
+        console.log(`[${new Date().toISOString()}] [PROXY] Selector 'td.col-member': Found ${personRows.length} rows`);
+      }
+      
+      if (personRows.length === 0) {
+        personRows = $('.person-summary').parent();
+        console.log(`[${new Date().toISOString()}] [PROXY] Selector '.person-summary parent': Found ${personRows.length} rows`);
+      }
+      
+      if (personRows.length === 0) {
+        const allTds = $('td');
+        console.log(`[${new Date().toISOString()}] [PROXY] Total <td> elements: ${allTds.length}`);
+        const personSummaryDivs = $('.person-summary');
+        console.log(`[${new Date().toISOString()}] [PROXY] Total .person-summary divs: ${personSummaryDivs.length}`);
+      }
+      
+      console.log(`[${new Date().toISOString()}] [PROXY] Using ${personRows.length} person rows for parsing`);
+      
+      personRows.each((index, element) => {
+        try {
+          const $row = $(element);
+          let $personSummary = $row.find('.person-summary');
+          
+          // If not found in row, try finding in parent tr
+          if ($personSummary.length === 0) {
+            $personSummary = $row.closest('tr').find('.person-summary');
+            console.log(`[${new Date().toISOString()}] [PROXY] Row ${index}: Found person-summary in parent tr`);
+          }
+          
+          if ($personSummary.length === 0) {
+            console.warn(`[${new Date().toISOString()}] [PROXY] Row ${index}: No person-summary found. Row HTML sample:`, $row.html()?.substring(0, 200) || 'empty');
+            return;
+          }
+          
+          // Extract username from avatar link or name link
+          const $avatarLink = $personSummary.find('a.avatar');
+          const $nameLink = $personSummary.find('a.name');
+          
+          const avatarHref = $avatarLink.attr('href') || '';
+          const nameHref = $nameLink.attr('href') || '';
+          
+          console.log(`[${new Date().toISOString()}] [PROXY] Row ${index}: avatarHref: "${avatarHref}", nameHref: "${nameHref}"`);
+          console.log(`[${new Date().toISOString()}] [PROXY] Row ${index}: avatarLink found: ${$avatarLink.length > 0}, nameLink found: ${$nameLink.length > 0}`);
+          
+          // Extract username from href (format: /username/)
+          const usernameMatch = (nameHref || avatarHref).match(/\/([^\/]+)\//);
+          const username = usernameMatch ? usernameMatch[1].trim() : null;
+          
+          if (!username) {
+            console.warn(`[${new Date().toISOString()}] [PROXY] Row ${index}: Could not extract username. avatarHref: "${avatarHref}", nameHref: "${nameHref}"`);
+            console.warn(`[${new Date().toISOString()}] [PROXY] Row ${index}: Person summary HTML sample:`, $personSummary.html()?.substring(0, 300) || 'empty');
+            return;
+          }
+          
+          // Extract avatar URL
+          const $avatarImg = $avatarLink.find('img');
+          const avatarUrl = $avatarImg.attr('src') || null;
+          const avatarAlt = $avatarImg.attr('alt') || '';
+          
+          // Extract display name
+          const displayName = $nameLink.text().trim() || avatarAlt.trim() || username;
+          
+          console.log(`[${new Date().toISOString()}] [PROXY] Row ${index}: ✓ Extracted user - username: "${username}", displayName: "${displayName}", avatarUrl: ${avatarUrl ? 'present' : 'missing'}`);
+          
+          followingUsers.push({
+            username,
+            avatarUrl: avatarUrl || null,
+            displayName: displayName && displayName !== username ? displayName : undefined,
+          });
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          const errorStack = error instanceof Error ? error.stack : undefined;
+          console.error(`[${new Date().toISOString()}] [PROXY] Error parsing row ${index}:`, errorMsg);
+          if (errorStack) {
+            console.error(`[${new Date().toISOString()}] [PROXY] Error stack:`, errorStack);
+          }
+        }
+      });
+      
+      console.log(`[${new Date().toISOString()}] [PROXY] ✓ Successfully parsed ${followingUsers.length} following users for ${username}`);
+      
+      if (followingUsers.length === 0) {
+        console.warn(`[${new Date().toISOString()}] [PROXY] ⚠️ Warning: No users found. Checking HTML structure...`);
+        console.warn(`[${new Date().toISOString()}] [PROXY] HTML length: ${html.length} characters`);
+        console.warn(`[${new Date().toISOString()}] [PROXY] Contains 'person-summary': ${html.includes('person-summary')}`);
+        console.warn(`[${new Date().toISOString()}] [PROXY] Contains 'col-member': ${html.includes('col-member')}`);
+        console.warn(`[${new Date().toISOString()}] [PROXY] Contains 'table-person': ${html.includes('table-person')}`);
+        console.warn(`[${new Date().toISOString()}] [PROXY] HTML sample (first 1000 chars):`, html.substring(0, 1000));
+      } else {
+        console.log(`[${new Date().toISOString()}] [PROXY] Sample usernames:`, followingUsers.slice(0, 3).map(u => u.username).join(', '));
+      }
+      
       return res.json({ following: followingUsers });
       
     } catch (error) {
