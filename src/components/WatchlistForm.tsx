@@ -485,6 +485,7 @@ export function WatchlistForm({
           className="form-group"
           style={{ '--circle-color': circleColor } as React.CSSProperties}
         >
+          <div className="form-circle" style={{ backgroundColor: circleColor }}></div>
           <label htmlFor={input.id}>
             {input.validation.isValid && input.validation.profile ? (
               <span className="label-with-avatar">
@@ -626,6 +627,13 @@ export function WatchlistForm({
                               userInputs.length % 3 === 1 ? '#00E054' : '#40BCF4'
           } as React.CSSProperties}
         >
+          <div 
+            className="form-circle" 
+            style={{ 
+              backgroundColor: userInputs.length % 3 === 0 ? '#FF8000' : 
+                              userInputs.length % 3 === 1 ? '#00E054' : '#40BCF4'
+            }}
+          ></div>
           <button
             type="button"
             className="add-user-button"

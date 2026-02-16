@@ -8,21 +8,20 @@
     .form-group {
       position: relative;
       margin-bottom: $spacing-md;
-      padding-left: 40px; // Make room for decorative circle
+      padding-left: 60px; // Make room for larger decorative circle
       padding-right: 40px; // Always reserve space for remove button (even when hidden)
       
-      // Decorative circle on the left
-      &::before {
-        content: '';
+      .form-circle {
         position: absolute;
         left: 0;
-        top: 50%;
+        // Center on input: label height (~1.44rem) + label margin (0.5rem) + half input height (22px)
+        top: calc(1.44rem + 0.5rem + 22px);
         transform: translateY(-50%);
-        width: 24px;
-        height: 24px;
+        width: 48px;
+        height: 48px;
         border-radius: 50%;
         z-index: 0;
-        background-color: var(--circle-color, #FF8000);
+        pointer-events: none;
       }
       
       .remove-user-button {
@@ -64,6 +63,8 @@
       color: $text-secondary;
       font-weight: 500;
       font-size: 0.9rem;
+      position: relative;
+      z-index: 1; // Ensure label is above circle
       
       .label-with-avatar {
         display: flex;
@@ -97,6 +98,7 @@
     
     .input-wrapper {
       position: relative;
+      z-index: 1; // Ensure input is above circle
       
       input {
         width: 100%;
@@ -244,21 +246,21 @@
   .add-user-button-wrapper {
     position: relative;
     margin-bottom: $spacing-md;
-    padding-left: 40px; // Match form-group spacing
+    padding-left: 60px; // Match form-group spacing for larger circle
     padding-right: 40px; // Match form-group spacing (reserve space for consistency)
+    padding-top: 26.031px; // 23.031px + 13px - 10px
     
-    // Decorative circle on the left (next color in rotation)
-    &::before {
-      content: '';
+    .form-circle {
       position: absolute;
       left: 0;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 24px;
-      height: 24px;
+      // Center on button: padding-top + half button height (44px / 2 = 22px)
+      top: calc(26.031px + 22px);
+      transform: translateY(-41%);
+      width: 48px;
+      height: 48px;
       border-radius: 50%;
       z-index: 0;
-      background-color: var(--circle-color, #FF8000);
+      pointer-events: none;
     }
   }
   
