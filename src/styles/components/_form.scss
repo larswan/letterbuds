@@ -5,11 +5,61 @@
 .watchlist-form {
   width: 100%;
   
-  .form-group {
-    margin-bottom: $spacing-md;
+    .form-group {
+      position: relative;
+      margin-bottom: $spacing-md;
+      padding-left: 40px; // Make room for decorative circle
+      padding-right: 40px; // Always reserve space for remove button (even when hidden)
+      
+      // Decorative circle on the left
+      &::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        z-index: 0;
+        background-color: var(--circle-color, #FF8000);
+      }
+      
+      .remove-user-button {
+        position: absolute;
+        right: 0;
+        // Position relative to input-wrapper: label height + margin + half input height
+        // Label: ~1.44rem (0.9rem * 1.6 line-height) + 0.5rem margin = ~1.94rem
+        // Input center: 1.94rem + (44px / 2) = 1.94rem + 1.375rem = ~3.3rem
+        top: calc(1.44rem + 0.5rem + 22px); // Align with center of input (44px / 2 = 22px)
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: #f87171; // red-400
+        cursor: pointer;
+        padding: $spacing-xs;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        transition: color 0.2s ease, transform 0.2s ease;
+        z-index: 10;
+        
+        &:hover:not(:disabled) {
+          color: #ef4444; // red-500 (darker red on hover)
+          transform: translateY(-50%) scale(1.1);
+        }
+        
+        &:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+      }
     
     label {
-      display: block;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       margin-bottom: $spacing-xs;
       color: $text-secondary;
       font-weight: 500;
@@ -19,6 +69,7 @@
         display: flex;
         align-items: center;
         gap: $spacing-xs;
+        flex: 1;
         
         .label-avatar {
           width: 24px;
@@ -26,6 +77,20 @@
           border-radius: 50%;
           object-fit: cover;
           flex-shrink: 0;
+        }
+      }
+      
+      .label-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: $spacing-xs;
+        flex-shrink: 0;
+        
+        &.valid-icon {
+          color: #4ade80; // green-400
+          font-size: 16px;
+          animation: checkmark 0.5s ease-out;
         }
       }
     }
@@ -42,6 +107,8 @@
         border-radius: $border-radius;
         color: $text-primary;
         font-size: 1rem;
+        min-height: 44px; // Ensure consistent height
+        box-sizing: border-box;
         transition: border-color 0.2s ease, box-shadow 0.2s ease;
         
         &:focus {
@@ -69,36 +136,18 @@
         }
       }
       
-      .remove-user-button {
+      
+      .dropdown-arrow-icon {
         position: absolute;
-        right: 45px;
+        right: 35px;
         top: 50%;
         transform: translateY(-50%);
-        background: none;
-        border: none;
         color: $text-muted;
-        cursor: pointer;
-        padding: 4px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-        transition: color 0.2s ease;
+        font-size: 10px;
+        pointer-events: none;
         z-index: 1;
-        
-        &:hover {
-          color: #f87171; // red-400
-        }
-        
-        &:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-      }
-      
-      // Adjust input padding when remove button is present
-      &:has(.remove-user-button) input {
-        padding-right: 70px;
+        transition: opacity 0.2s ease;
+        opacity: 0.6;
       }
       
       .input-icon {
@@ -111,6 +160,7 @@
         justify-content: center;
         pointer-events: none;
         animation: fadeInScale 0.3s ease-out;
+        z-index: 2;
         
         &.validating {
           .spinner {
@@ -135,6 +185,49 @@
           animation: shake 0.4s ease-out;
         }
       }
+      
+      // Hide dropdown arrow when input has validation icons
+      &:has(.input-icon) .dropdown-arrow-icon {
+        display: none;
+      }
+      
+      .suggestions-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        margin-top: 4px;
+        background-color: $bg-secondary;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: $border-radius;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        max-height: 200px;
+        overflow-y: auto;
+        animation: slideDown 0.2s ease-out;
+        
+        ul {
+          list-style: none;
+          margin: 0;
+          padding: $spacing-xs 0;
+        }
+        
+        li {
+          padding: $spacing-sm $spacing-md;
+          color: $text-primary;
+          cursor: pointer;
+          transition: background-color 0.15s ease;
+          
+          &:hover,
+          &.selected {
+            background-color: rgba(255, 255, 255, 0.1);
+          }
+          
+          &.selected {
+            background-color: rgba(255, 255, 255, 0.15);
+          }
+        }
+      }
     }
     
     .error-message {
@@ -148,13 +241,35 @@
     }
   }
   
+  .add-user-button-wrapper {
+    position: relative;
+    margin-bottom: $spacing-md;
+    padding-left: 40px; // Match form-group spacing
+    padding-right: 40px; // Match form-group spacing (reserve space for consistency)
+    
+    // Decorative circle on the left (next color in rotation)
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      z-index: 0;
+      background-color: var(--circle-color, #FF8000);
+    }
+  }
+  
   .add-user-button {
     @include button-base;
     width: 100%;
     background-color: $bg-secondary;
     color: $text-primary;
     border: 1px dashed rgba(255, 255, 255, 0.2);
-    margin-bottom: $spacing-md;
+    padding: $spacing-sm; // Match input padding
+    min-height: 44px; // Match input height
     display: flex;
     align-items: center;
     justify-content: center;

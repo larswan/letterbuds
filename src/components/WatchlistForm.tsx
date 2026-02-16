@@ -83,9 +83,12 @@ export function WatchlistForm({
   });
   const [suggestions, setSuggestions] = useState<string[]>(getStoredUsernames());
   const [nextId, setNextId] = useState(userInputs.length);
+  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number>(-1);
   
   // Debounce timers for each input
   const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const dropdownRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Update state when initial values change
   useEffect(() => {
@@ -112,6 +115,28 @@ export function WatchlistForm({
       debounceTimers.current.clear();
     };
   }, []);
+  
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (activeDropdown) {
+        const dropdown = dropdownRefs.current.get(activeDropdown);
+        const target = event.target as Node;
+        if (dropdown && !dropdown.contains(target)) {
+          const input = document.getElementById(activeDropdown);
+          if (input && !input.contains(target)) {
+            setActiveDropdown(null);
+            setSelectedSuggestionIndex(-1);
+          }
+        }
+      }
+    }
+    
+    if (activeDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [activeDropdown]);
 
   const validateUsername = async (username: string, userId: string, skipIfAlreadyValidated: boolean = false) => {
     const trimmed = username.trim();
@@ -187,13 +212,50 @@ export function WatchlistForm({
     }
   };
 
+  // Get filtered suggestions for an input
+  const getFilteredSuggestions = (value: string): string[] => {
+    const trimmed = value.trim().toLowerCase();
+    if (!trimmed) return suggestions;
+    return suggestions.filter(s => s.toLowerCase().includes(trimmed));
+  };
+
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>, userId: string) => {
+    const input = userInputs.find(u => u.id === userId);
+    if (!input) return;
+
     if (e.key === 'Enter') {
       e.preventDefault();
-      const input = userInputs.find(u => u.id === userId);
-      if (input) {
+      if (selectedSuggestionIndex >= 0 && activeDropdown === userId) {
+        // Select the highlighted suggestion
+        const filtered = getFilteredSuggestions(input.username);
+        if (filtered[selectedSuggestionIndex]) {
+          handleUsernameChange(filtered[selectedSuggestionIndex], userId);
+          setActiveDropdown(null);
+          setSelectedSuggestionIndex(-1);
+        }
+      } else {
         validateUsername(input.username, userId);
       }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const filtered = getFilteredSuggestions(input.username);
+      if (filtered.length > 0) {
+        setActiveDropdown(userId);
+        setSelectedSuggestionIndex(prev => 
+          prev < filtered.length - 1 ? prev + 1 : 0
+        );
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (activeDropdown === userId && selectedSuggestionIndex >= 0) {
+        const filtered = getFilteredSuggestions(input.username);
+        setSelectedSuggestionIndex(prev => 
+          prev > 0 ? prev - 1 : filtered.length - 1
+        );
+      }
+    } else if (e.key === 'Escape') {
+      setActiveDropdown(null);
+      setSelectedSuggestionIndex(-1);
     }
   };
 
@@ -221,6 +283,9 @@ export function WatchlistForm({
     setUserInputs(prev => prev.map(u => 
       u.id === userId ? { ...u, username: value } : u
     ));
+    
+    // Reset suggestion selection when typing
+    setSelectedSuggestionIndex(-1);
     
     // Clear duplicate errors from other fields if they were duplicating the previous value
     if (previousValueTrimmed) {
@@ -409,8 +474,15 @@ export function WatchlistForm({
 
   return (
     <form className="watchlist-form" onSubmit={handleSubmit}>
-      {userInputs.map((input, index) => (
-        <div key={input.id} className="form-group">
+      {userInputs.map((input, index) => {
+        const colorIndex = index % 3;
+        const circleColor = colorIndex === 0 ? '#FF8000' : colorIndex === 1 ? '#00E054' : '#40BCF4';
+        return (
+        <div 
+          key={input.id} 
+          className="form-group"
+          style={{ '--circle-color': circleColor } as React.CSSProperties}
+        >
           <label htmlFor={input.id}>
             {input.validation.isValid && input.validation.profile ? (
               <span className="label-with-avatar">
@@ -425,19 +497,43 @@ export function WatchlistForm({
                   />
                 )}
                 <span>{input.validation.profile.username}</span>
+                {input.validation.isValid === true && !input.validation.isValidating && (
+                  <span className="label-icon valid-icon">
+                    <FaCheck />
+                  </span>
+                )}
               </span>
             ) : (
-              index === 0 ? 'First Username' : index === 1 ? 'Second Username' : `Username ${index + 1}`
+              <>
+                {index === 0 ? 'First Username' : index === 1 ? 'Second Username' : `Username ${index + 1}`}
+                {input.validation.isValid === true && !input.validation.isValidating && (
+                  <span className="label-icon valid-icon">
+                    <FaCheck />
+                  </span>
+                )}
+              </>
             )}
           </label>
           <div className="input-wrapper">
             <input
               id={input.id}
               type="text"
-              list="username-suggestions"
               value={input.username}
               onChange={(e) => handleUsernameChange(e.target.value, input.id)}
-              onBlur={() => handleBlur(input.id)}
+              onFocus={() => {
+                const filtered = getFilteredSuggestions(input.username);
+                if (filtered.length > 0) {
+                  setActiveDropdown(input.id);
+                }
+              }}
+              onBlur={() => {
+                // Delay to allow click on suggestion
+                setTimeout(() => {
+                  handleBlur(input.id);
+                  setActiveDropdown(null);
+                  setSelectedSuggestionIndex(-1);
+                }, 200);
+              }}
               onKeyDown={(e) => handleKeyDown(e, input.id)}
               placeholder="Enter Letterboxd username"
               disabled={isLoading}
@@ -445,14 +541,45 @@ export function WatchlistForm({
               autoComplete="off"
               className={input.validation.isValid === true ? 'valid' : input.validation.isValid === false ? 'invalid' : ''}
             />
+            {/* Custom dropdown arrow - only show if there are matching suggestions and no validation icons */}
+            {getFilteredSuggestions(input.username).length > 0 && 
+             !input.validation.isValidating && 
+             input.validation.isValid === null && (
+              <span className="dropdown-arrow-icon">▼</span>
+            )}
+            {/* Custom suggestions dropdown */}
+            {activeDropdown === input.id && getFilteredSuggestions(input.username).length > 0 && (
+              <div 
+                className="suggestions-dropdown"
+                ref={(el) => {
+                  if (el) {
+                    dropdownRefs.current.set(input.id, el);
+                  } else {
+                    dropdownRefs.current.delete(input.id);
+                  }
+                }}
+              >
+                <ul>
+                  {getFilteredSuggestions(input.username).map((suggestion, index) => (
+                    <li
+                      key={suggestion}
+                      className={index === selectedSuggestionIndex ? 'selected' : ''}
+                      onMouseDown={(e) => {
+                        e.preventDefault(); // Prevent blur
+                        handleUsernameChange(suggestion, input.id);
+                        setActiveDropdown(null);
+                        setSelectedSuggestionIndex(-1);
+                      }}
+                    >
+                      {suggestion}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {input.validation.isValidating && (
               <span className="input-icon validating">
                 <span className="spinner"></span>
-              </span>
-            )}
-            {input.validation.isValid === true && !input.validation.isValidating && (
-              <span className="input-icon valid-icon">
-                <FaCheck />
               </span>
             )}
             {input.validation.isValid === false && !input.validation.isValidating && (
@@ -460,18 +587,18 @@ export function WatchlistForm({
                 <FaTimes />
               </span>
             )}
-            {userInputs.length > 2 && (
-              <button
-                type="button"
-                className="remove-user-button"
-                onClick={() => removeUser(input.id)}
-                disabled={isLoading}
-                aria-label="Remove user"
-              >
-                <FaTimesCircle />
-              </button>
-            )}
           </div>
+          {userInputs.length > 2 && (
+            <button
+              type="button"
+              className="remove-user-button"
+              onClick={() => removeUser(input.id)}
+              disabled={isLoading}
+              aria-label="Remove user"
+            >
+              <FaTimesCircle />
+            </button>
+          )}
           {input.validation.error && (
             <div className="error-message" role="alert">
               {input.validation.error}
@@ -486,25 +613,29 @@ export function WatchlistForm({
             />
           )}
         </div>
-      ))}
+        );
+      })}
       
       {userInputs.length < MAX_USERS && (
-        <button
-          type="button"
-          className="add-user-button"
-          onClick={addUser}
-          disabled={isLoading}
+        <div 
+          className="add-user-button-wrapper"
+          style={{
+            '--circle-color': userInputs.length % 3 === 0 ? '#FF8000' : 
+                              userInputs.length % 3 === 1 ? '#00E054' : '#40BCF4'
+          } as React.CSSProperties}
         >
-          <FaPlus />
-          <span>Add User</span>
-        </button>
+          <button
+            type="button"
+            className="add-user-button"
+            onClick={addUser}
+            disabled={isLoading}
+          >
+            <FaPlus />
+            <span>Add User</span>
+          </button>
+        </div>
       )}
       
-      <datalist id="username-suggestions">
-        {suggestions.map((username, index) => (
-          <option key={index} value={username} />
-        ))}
-      </datalist>
       
       <button 
         type="submit" 
