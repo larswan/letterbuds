@@ -1,4 +1,4 @@
-import { useState, useEffect, FormEvent, KeyboardEvent } from 'react';
+import { useState, useEffect, useRef, FormEvent, KeyboardEvent } from 'react';
 import { FaCheck, FaTimes, FaPlus, FaTimesCircle } from 'react-icons/fa';
 import { fetchUserProfile } from '../services/letterboxdService';
 import { UserProfile, FollowingUser } from '../types';
@@ -23,6 +23,7 @@ interface UserValidationState {
   isValid: boolean | null; // null = not validated yet
   profile: UserProfile | null;
   error: string | null;
+  lastValidatedValue: string | null; // Track what was last validated to avoid re-checking
 }
 
 const STORAGE_KEY = 'letterboxd-usernames';
@@ -71,16 +72,20 @@ export function WatchlistForm({
           isValid: initialProfiles[index] ? true : null,
           profile: initialProfiles[index] || null,
           error: null,
+          lastValidatedValue: initialProfiles[index] ? username.trim() : null,
         },
       }));
     }
     return [
-      { id: 'user-0', username: '', validation: { isValidating: false, isValid: null, profile: null, error: null } },
-      { id: 'user-1', username: '', validation: { isValidating: false, isValid: null, profile: null, error: null } },
+      { id: 'user-0', username: '', validation: { isValidating: false, isValid: null, profile: null, error: null, lastValidatedValue: null } },
+      { id: 'user-1', username: '', validation: { isValidating: false, isValid: null, profile: null, error: null, lastValidatedValue: null } },
     ];
   });
   const [suggestions, setSuggestions] = useState<string[]>(getStoredUsernames());
   const [nextId, setNextId] = useState(userInputs.length);
+  
+  // Debounce timers for each input
+  const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   // Update state when initial values change
   useEffect(() => {
@@ -93,20 +98,41 @@ export function WatchlistForm({
           isValid: initialProfiles[index] ? true : null,
           profile: initialProfiles[index] || null,
           error: null,
+          lastValidatedValue: initialProfiles[index] ? username.trim() : null,
         },
       })));
       setNextId(initialUsernames.length);
     }
   }, [initialUsernames, initialProfiles]);
+  
+  // Cleanup debounce timers on unmount
+  useEffect(() => {
+    return () => {
+      debounceTimers.current.forEach(timer => clearTimeout(timer));
+      debounceTimers.current.clear();
+    };
+  }, []);
 
-  const validateUsername = async (username: string, userId: string) => {
+  const validateUsername = async (username: string, userId: string, skipIfAlreadyValidated: boolean = false) => {
     const trimmed = username.trim();
+    const input = userInputs.find(u => u.id === userId);
+    
+    if (!input) return;
+    
+    // If empty, clear validation
     if (!trimmed) {
       setUserInputs(prev => prev.map(input => 
         input.id === userId 
-          ? { ...input, validation: { isValidating: false, isValid: null, profile: null, error: null } }
+          ? { ...input, validation: { isValidating: false, isValid: null, profile: null, error: null, lastValidatedValue: null } }
           : input
       ));
+      return;
+    }
+
+    // Skip validation if already validated with the same value
+    if (skipIfAlreadyValidated && 
+        input.validation.lastValidatedValue === trimmed && 
+        input.validation.isValid === true) {
       return;
     }
 
@@ -115,15 +141,16 @@ export function WatchlistForm({
     if (duplicateError) {
       setUserInputs(prev => prev.map(input => 
         input.id === userId 
-          ? { ...input, validation: { isValidating: false, isValid: false, profile: null, error: duplicateError } }
+          ? { ...input, validation: { isValidating: false, isValid: false, profile: null, error: duplicateError, lastValidatedValue: null } }
           : input
       ));
       return;
     }
 
+    // Clear any previous errors and start validating
     setUserInputs(prev => prev.map(input => 
       input.id === userId 
-        ? { ...input, validation: { isValidating: true, isValid: null, profile: null, error: null } }
+        ? { ...input, validation: { isValidating: true, isValid: null, profile: null, error: null, lastValidatedValue: null } }
         : input
     ));
 
@@ -131,13 +158,13 @@ export function WatchlistForm({
       const profile = await fetchUserProfile(trimmed, true);
       setUserInputs(prev => prev.map(input => 
         input.id === userId 
-          ? { ...input, validation: { isValidating: false, isValid: true, profile, error: null } }
+          ? { ...input, validation: { isValidating: false, isValid: true, profile, error: null, lastValidatedValue: trimmed } }
           : input
       ));
     } catch (error) {
       setUserInputs(prev => prev.map(input => 
         input.id === userId 
-          ? { ...input, validation: { isValidating: false, isValid: false, profile: null, error: "Couldn't find a public user with this username" } }
+          ? { ...input, validation: { isValidating: false, isValid: false, profile: null, error: "Couldn't find a public user with this username", lastValidatedValue: trimmed } }
           : input
       ));
     }
@@ -146,7 +173,17 @@ export function WatchlistForm({
   const handleBlur = (userId: string) => {
     const input = userInputs.find(u => u.id === userId);
     if (input) {
-      validateUsername(input.username, userId);
+      const trimmed = input.username.trim();
+      // Only validate if the value has changed from what was last validated
+      if (trimmed && input.validation.lastValidatedValue !== trimmed) {
+        // Clear any pending debounce timer
+        const timer = debounceTimers.current.get(userId);
+        if (timer) {
+          clearTimeout(timer);
+          debounceTimers.current.delete(userId);
+        }
+        validateUsername(trimmed, userId, false);
+      }
     }
   };
 
@@ -203,26 +240,15 @@ export function WatchlistForm({
               }
             };
           } else {
-            // No longer a duplicate, re-validate if it was valid before
-            if (u.validation.isValid === true) {
-              return u; // Keep it valid
-            }
-            return {
-              ...u,
-              validation: {
-                isValidating: false,
-                isValid: null,
-                profile: null,
-                error: null
-              }
-            };
+            // No longer a duplicate, keep validation if it was valid
+            return u;
           }
         }
         return u;
       }));
     }
     
-    // Check for duplicates
+    // Check for duplicates immediately
     const duplicateError = checkForDuplicates(value, userId);
     if (duplicateError) {
       setUserInputs(prev => prev.map(u => 
@@ -233,7 +259,8 @@ export function WatchlistForm({
                 isValidating: false, 
                 isValid: false, 
                 profile: null, 
-                error: duplicateError 
+                error: duplicateError,
+                lastValidatedValue: null
               } 
             }
           : u
@@ -241,25 +268,49 @@ export function WatchlistForm({
       return;
     }
     
-    // Check if this looks like a selection from datalist
+    // Clear any previous errors when user types (but don't clear if already validated with same value)
     const trimmedValue = value.trim();
-    const isDatalistSelection = suggestions.some(
-      suggestion => suggestion.toLowerCase() === trimmedValue.toLowerCase()
-    );
+    const isSameAsValidated = input.validation.lastValidatedValue === trimmedValue && input.validation.isValid === true;
     
-    if (isDatalistSelection && previousValue !== value && trimmedValue) {
-      setTimeout(() => {
-        validateUsername(trimmedValue, userId);
-      }, 100);
+    if (!isSameAsValidated) {
+      // Clear validation state when user types (but don't show error yet)
+      setUserInputs(prev => prev.map(u => 
+        u.id === userId 
+          ? { 
+              ...u, 
+              validation: { 
+                isValidating: false, 
+                isValid: null, 
+                profile: null, 
+                error: null,
+                lastValidatedValue: null
+              } 
+            }
+          : u
+      ));
+    }
+    
+    // Clear any existing debounce timer for this input
+    const existingTimer = debounceTimers.current.get(userId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+    
+    // Set up debounced validation (2 seconds after user stops typing)
+    if (trimmedValue) {
+      const timer = setTimeout(() => {
+        validateUsername(trimmedValue, userId, true);
+        debounceTimers.current.delete(userId);
+      }, 2000);
+      
+      debounceTimers.current.set(userId, timer);
     } else {
-      // Reset validation when user types manually (but keep duplicate errors)
-      if (input.validation.isValid !== null && !input.validation.error?.includes('already been added')) {
-        setUserInputs(prev => prev.map(u => 
-          u.id === userId 
-            ? { ...u, validation: { isValidating: false, isValid: null, profile: null, error: null } }
-            : u
-        ));
-      }
+      // Clear validation if input is empty
+      setUserInputs(prev => prev.map(u => 
+        u.id === userId 
+          ? { ...u, validation: { isValidating: false, isValid: null, profile: null, error: null, lastValidatedValue: null } }
+          : u
+      ));
     }
   };
 
@@ -268,7 +319,7 @@ export function WatchlistForm({
       setUserInputs(prev => [...prev, {
         id: `user-${nextId}`,
         username: '',
-        validation: { isValidating: false, isValid: null, profile: null, error: null },
+        validation: { isValidating: false, isValid: null, profile: null, error: null, lastValidatedValue: null },
       }]);
       setNextId(prev => prev + 1);
     }
@@ -302,6 +353,7 @@ export function WatchlistForm({
                   avatarUrl: selectedUser.avatarUrl,
                 },
                 error: null,
+                lastValidatedValue: selectedUser.username,
               },
             }
           : input
@@ -320,6 +372,7 @@ export function WatchlistForm({
               avatarUrl: selectedUser.avatarUrl,
             },
             error: null,
+            lastValidatedValue: selectedUser.username,
           },
         }]);
         setNextId(prev => prev + 1);
