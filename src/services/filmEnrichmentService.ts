@@ -43,6 +43,14 @@ interface TMDBMovieResponse {
   };
 }
 
+interface TMDBFindResponse {
+  movie_results: Array<{
+    id: number;
+    poster_path: string | null;
+    [key: string]: any;
+  }>;
+}
+
 /**
  * Enrich film data using OMDb API
  */
@@ -158,6 +166,48 @@ export async function enrichFilm(film: Film): Promise<Film> {
     ...enriched,
     trailerUrl,
   };
+}
+
+/**
+ * Enrich a single film's poster from TMDB using IMDb ID
+ * Returns null if enrichment fails or IMDb ID is missing
+ */
+export async function enrichFilmPosterFromTMDB(film: Film): Promise<Film | null> {
+  if (!film.imdbId || !TMDB_API_KEY) {
+    return null;
+  }
+
+  try {
+    // Use TMDB find by external ID endpoint
+    const response = await fetch(
+      `https://api.themoviedb.org/3/find/${film.imdbId}?api_key=${TMDB_API_KEY}&external_source=imdb_id`
+    );
+    
+    if (!response.ok) {
+      console.warn(`[ENRICH] TMDB API error for ${film.imdbId}: ${response.status}`);
+      return null;
+    }
+
+    const data: TMDBFindResponse = await response.json();
+    const movieResult = data.movie_results?.[0];
+    
+    if (!movieResult?.poster_path) {
+      return null;
+    }
+
+    // Construct poster URL (using w500 as default, will be resized in UI)
+    const posterPath = movieResult.poster_path;
+    const posterUrl = `https://image.tmdb.org/t/p/w500${posterPath}`;
+
+    return {
+      ...film,
+      posterUrl,
+      tmdbId: movieResult.id || film.tmdbId,
+    };
+  } catch (error) {
+    console.error(`[ENRICH] Error enriching poster for ${film.title}:`, error);
+    return null;
+  }
 }
 
 /**

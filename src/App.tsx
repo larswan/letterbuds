@@ -4,7 +4,7 @@ import { MatchResults } from './components/MatchResults';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { fetchWatchlist, fetchUserProfile } from './services/letterboxdService';
 import { findCommonFilmsMultiUser } from './services/matchService';
-import { enrichFilms } from './services/filmEnrichmentService';
+import { enrichFilms, enrichFilmPosterFromTMDB } from './services/filmEnrichmentService';
 import { sessionCache } from './services/cacheService';
 import { MultiUserMatchResult, UserProfile, Film } from './types';
 import './styles/main.scss';
@@ -33,6 +33,39 @@ function App() {
       const userFilms = [];
       const userProfiles: (UserProfile | null)[] = [];
       const failedUsers: string[] = [];
+      const enrichmentQueue: Film[] = []; // Queue for films to enrich
+      const enrichedFilmsCache = new Map<string, Film>(); // Cache for enriched films during scraping
+      
+      // Helper to find common films between current user and all previous users
+      const findCommonFilmsAcrossUsers = (
+        previousUsers: Array<{ username: string; films: Film[] }>,
+        currentFilms: Film[]
+      ): Film[] => {
+        const commonFilms: Film[] = [];
+        const previousFilmsSet = new Set<string>();
+        
+        // Create set of all previous users' films
+        previousUsers.forEach(({ films }) => {
+          films.forEach(film => {
+            const key = film.tmdbId 
+              ? `tmdb:${film.tmdbId}`
+              : `${film.title.toLowerCase()}:${film.year || ''}`;
+            previousFilmsSet.add(key);
+          });
+        });
+        
+        // Find films in current user's list that are also in previous users' lists
+        currentFilms.forEach(film => {
+          const key = film.tmdbId 
+            ? `tmdb:${film.tmdbId}`
+            : `${film.title.toLowerCase()}:${film.year || ''}`;
+          if (previousFilmsSet.has(key)) {
+            commonFilms.push(film);
+          }
+        });
+        
+        return commonFilms;
+      };
       
       for (let i = 0; i < usernamesArray.length; i++) {
         const username = usernamesArray[i];
@@ -67,6 +100,30 @@ function App() {
           
           userFilms.push({ username, films });
           userProfiles.push(profile);
+
+          // Starting with 2nd user, find common films and queue for enrichment
+          if (i > 0 && userFilms.length >= 2) {
+            const previousFilms = userFilms.slice(0, -1); // All previous users
+            const currentFilms = films;
+            
+            // Find films in common between current user and all previous users
+            const commonFilms = findCommonFilmsAcrossUsers(previousFilms, currentFilms);
+            
+            // Queue films that need enrichment (have imdbId but no posterUrl)
+            commonFilms.forEach(film => {
+              if (film.imdbId && !film.posterUrl) {
+                const key = `${film.title.toLowerCase()}-${film.year || ''}`;
+                if (!enrichedFilmsCache.has(key)) {
+                  enrichmentQueue.push(film);
+                  enrichedFilmsCache.set(key, film);
+                }
+              }
+            });
+            
+            if (commonFilms.length > 0) {
+              console.log(`[${new Date().toISOString()}] [ENRICH] Found ${commonFilms.length} common films, ${enrichmentQueue.length} queued for enrichment`);
+            }
+          }
         } catch (err) {
           // If one user fails, continue with others but log the error
           const errorMessage = err instanceof Error ? err.message : 'Unknown error';
@@ -99,16 +156,19 @@ function App() {
 
       // Find common films across all combinations
       const matchResult = findCommonFilmsMultiUser(userFilms);
+      
+      // Show results immediately (don't wait for enrichment)
       setResult(matchResult);
       setProfiles(userProfiles);
+      setIsLoading(false);
+      setCurrentScrapingUsername(undefined);
       
       // Start enrichment in background (don't block UI) - only enrich common films
-      enrichCommonFilmsInBackground(matchResult);
+      enrichCommonFilmsInBackground(matchResult, enrichmentQueue);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
       setError(errorMessage);
       console.error(`[${new Date().toISOString()}] [ERROR] Comparison failed:`, err);
-    } finally {
       setIsLoading(false);
       setCurrentScrapingUsername(undefined);
     }
@@ -123,117 +183,92 @@ function App() {
   };
 
   // Enrich only common films in background after results are shown
-  const enrichCommonFilmsInBackground = async (matchResult: MultiUserMatchResult) => {
-    // Collect all unique common films from all groups
-    const commonFilmsSet = new Map<string, Film>();
+  const enrichCommonFilmsInBackground = async (
+    matchResult: MultiUserMatchResult,
+    initialQueue: Film[] = []
+  ) => {
+    // Collect all unique common films from all groups that need enrichment
+    const filmsToEnrich = new Map<string, Film>();
     
     matchResult.userGroups.forEach(group => {
       group.commonFilms.forEach(film => {
-        const key = `${film.title.toLowerCase().trim()}-${film.year || 'unknown'}`;
-        if (!commonFilmsSet.has(key)) {
-          commonFilmsSet.set(key, film);
+        if (film.imdbId && !film.posterUrl) {
+          const key = `${film.title.toLowerCase().trim()}-${film.year || 'unknown'}`;
+          if (!filmsToEnrich.has(key)) {
+            filmsToEnrich.set(key, film);
+          }
         }
       });
     });
     
-    const commonFilms = Array.from(commonFilmsSet.values());
-    
-    if (commonFilms.length === 0) {
-      console.log(`[${new Date().toISOString()}] [ENRICH] No common films to enrich`);
-      return;
-    }
-    
-    // Check cache for enriched data first
-    const cacheKey = `common-${matchResult.userGroups.map(g => g.usernames.sort().join('-')).sort().join('_')}`;
-    let cachedEnriched = sessionCache.getEnrichedData(cacheKey);
-    
-    if (cachedEnriched) {
-      console.log(`[${new Date().toISOString()}] [ENRICH] Using cached enriched data for ${cachedEnriched.length} films`);
-      // Update result with cached enriched data
-      setResult(prevResult => {
-        if (!prevResult) return prevResult;
-        
-        return {
-          ...prevResult,
-          userGroups: prevResult.userGroups.map(group => ({
-            ...group,
-            commonFilms: sessionCache.mergeEnrichedDataIntoFilms(group.commonFilms, cachedEnriched!),
-          })),
-        };
-      });
-      return;
-    }
-    
-    // Check if we need to enrich (some films might already be enriched)
-    const filmsToEnrich = commonFilms.filter(film => !film.posterUrl && !film.plot && film.imdbId);
-    
-    if (filmsToEnrich.length === 0) {
-      console.log(`[${new Date().toISOString()}] [ENRICH] No films need enrichment (missing IMDb IDs or already enriched)`);
-      return;
-    }
-    
-    console.log(`[${new Date().toISOString()}] [ENRICH] Starting background enrichment for ${filmsToEnrich.length} common films...`);
-    
-    try {
-      // Enrich films that need it
-      const enrichedFilms = await enrichFilms(filmsToEnrich);
-      
-      // Merge enriched data back into original common films
-      const enrichedMap = new Map<string, Film>();
-      enrichedFilms.forEach(film => {
+    // Add initial queue films
+    initialQueue.forEach(film => {
+      if (film.imdbId && !film.posterUrl) {
         const key = `${film.title.toLowerCase().trim()}-${film.year || 'unknown'}`;
-        enrichedMap.set(key, film);
-      });
-      
-      const allEnrichedCommonFilms = commonFilms.map(film => {
-        const key = `${film.title.toLowerCase().trim()}-${film.year || 'unknown'}`;
-        const enriched = enrichedMap.get(key);
-        return enriched ? { ...film, ...enriched } : film;
-      });
-      
-      // Store enriched films in cache
-      sessionCache.setEnrichedData(cacheKey, allEnrichedCommonFilms);
-      
-      // Save enriched data to server
-      try {
-        const saveResponse = await fetch('/api/enrich-and-save', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            username: 'common-films',
-            films: allEnrichedCommonFilms,
-          }),
-        });
-        
-        if (saveResponse.ok) {
-          const saveData = await saveResponse.json();
-          console.log(`[${new Date().toISOString()}] [ENRICH] Saved enriched data for ${saveData.filmCount} common films`);
-        } else {
-          console.warn(`[${new Date().toISOString()}] [ENRICH] Failed to save enriched data`);
+        if (!filmsToEnrich.has(key)) {
+          filmsToEnrich.set(key, film);
         }
-      } catch (saveError) {
-        console.error(`[${new Date().toISOString()}] [ENRICH] Error saving enriched data:`, saveError);
+      }
+    });
+    
+    const films = Array.from(filmsToEnrich.values());
+    
+    if (films.length === 0) {
+      console.log(`[${new Date().toISOString()}] [ENRICH] No common films need enrichment`);
+      return;
+    }
+    
+    console.log(`[${new Date().toISOString()}] [ENRICH] Starting background enrichment for ${films.length} common films...`);
+    
+    // Enrich films one by one and update UI as each completes
+    for (let i = 0; i < films.length; i++) {
+      const film = films[i];
+      const filmKey = `${film.title.toLowerCase().trim()}-${film.year || 'unknown'}`;
+      
+      // Check cache first
+      let enriched: Film | null = sessionCache.getEnrichedFilm(film);
+      
+      if (enriched && enriched.posterUrl) {
+        console.log(`[${new Date().toISOString()}] [ENRICH] Using cached poster for "${film.title}" (${i + 1}/${films.length})`);
+      } else {
+        // Small delay to avoid rate limiting
+        if (i > 0) {
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+        
+        console.log(`[${new Date().toISOString()}] [ENRICH] Fetching poster for "${film.title}" from TMDB (${i + 1}/${films.length})...`);
+        enriched = await enrichFilmPosterFromTMDB(film);
+        
+        // Cache enriched film if successful
+        if (enriched && enriched.posterUrl) {
+          sessionCache.setEnrichedFilm(enriched);
+        }
       }
       
-      // Update the result with enriched data
-      setResult(prevResult => {
-        if (!prevResult) return prevResult;
+      // Update result state with enriched film (if we got one)
+      if (enriched && enriched.posterUrl) {
+        setResult(prevResult => {
+          if (!prevResult) return prevResult;
+          
+          return {
+            ...prevResult,
+            userGroups: prevResult.userGroups.map(group => ({
+              ...group,
+              commonFilms: group.commonFilms.map(f => {
+                const fKey = `${f.title.toLowerCase().trim()}-${f.year || 'unknown'}`;
+                return fKey === filmKey ? { ...f, posterUrl: enriched!.posterUrl } : f;
+              }),
+            })),
+          };
+        });
         
-        return {
-          ...prevResult,
-          userGroups: prevResult.userGroups.map(group => ({
-            ...group,
-            commonFilms: sessionCache.mergeEnrichedDataIntoFilms(group.commonFilms, allEnrichedCommonFilms),
-          })),
-        };
-      });
-      
-      console.log(`[${new Date().toISOString()}] [ENRICH] Background enrichment completed and UI updated`);
-    } catch (error) {
-      console.error(`[${new Date().toISOString()}] [ENRICH] Error enriching common films:`, error);
+        console.log(`[${new Date().toISOString()}] [ENRICH] ✓ Poster loaded for "${film.title}" (${i + 1}/${films.length})`);
+      } else {
+        console.log(`[${new Date().toISOString()}] [ENRICH] ✗ No poster found for "${film.title}" (${i + 1}/${films.length})`);
+      }
     }
+    
+    console.log(`[${new Date().toISOString()}] [ENRICH] Background enrichment completed`);
   };
 
   // Initialize following feature status - default to null (will be set by WatchlistForm)

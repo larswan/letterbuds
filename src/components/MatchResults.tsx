@@ -145,21 +145,34 @@ function FilmCard({ film }: { film: Film }) {
     : null;
 
   const posterUrl = getPosterUrl(film.posterUrl);
+  const hasPoster = !!posterUrl;
 
   const cardContent = (
     <div className="film-card">
-      {posterUrl && (
-        <div className="film-poster-container">
+      <div className="film-poster-container">
+        {hasPoster ? (
           <img 
             src={posterUrl} 
             alt={film.title}
             className="film-poster"
             onError={(e) => {
               (e.target as HTMLImageElement).style.display = 'none';
+              // Show placeholder if image fails to load
+              const container = (e.target as HTMLImageElement).parentElement;
+              if (container) {
+                const placeholder = document.createElement('div');
+                placeholder.className = 'film-poster-placeholder';
+                placeholder.textContent = 'No Poster';
+                container.appendChild(placeholder);
+              }
             }}
           />
-        </div>
-      )}
+        ) : (
+          <div className="film-poster-placeholder">
+            <span>No Poster</span>
+          </div>
+        )}
+      </div>
       <div className="film-info">
         <h3 className="film-title">{film.title}</h3>
         {film.year && <p className="film-year">{film.year}</p>}

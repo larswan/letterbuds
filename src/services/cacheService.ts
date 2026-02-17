@@ -120,6 +120,46 @@ class SessionCache {
   }
 
   /**
+   * Get cached enriched film by film key (title-year or imdbId)
+   */
+  getEnrichedFilm(film: Film): Film | null {
+    const filmKey = this.getFilmKey(film);
+    const cached = this.enrichedCache.get(`film-${filmKey}`);
+    if (!cached) return null;
+
+    // Check if expired
+    if (Date.now() - cached.timestamp > CACHE_TTL) {
+      this.enrichedCache.delete(`film-${filmKey}`);
+      return null;
+    }
+
+    // Find the matching film in cached array
+    return cached.films.find(f => this.getFilmKey(f) === filmKey) || null;
+  }
+
+  /**
+   * Store a single enriched film in cache
+   */
+  setEnrichedFilm(film: Film): void {
+    const filmKey = this.getFilmKey(film);
+    const cacheKey = `film-${filmKey}`;
+    
+    // Evict oldest entries if cache is full
+    if (this.enrichedCache.size >= MAX_ENRICHED_CACHE_SIZE) {
+      const oldestKey = this.getOldestKey(this.enrichedCache);
+      if (oldestKey && !oldestKey.startsWith('film-')) {
+        // Only evict non-film entries if possible
+        this.enrichedCache.delete(oldestKey);
+      }
+    }
+
+    this.enrichedCache.set(cacheKey, {
+      films: [film],
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
    * Merge enriched data into existing films by matching title and year
    */
   mergeEnrichedDataIntoFilms(films: Film[], enrichedFilms: Film[]): Film[] {
