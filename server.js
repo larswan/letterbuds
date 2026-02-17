@@ -4,7 +4,8 @@ import { dirname, join } from 'path';
 import cors from 'cors';
 import { load } from 'cheerio';
 import dotenv from 'dotenv';
-import { writeFile, mkdir } from 'fs/promises';
+import { writeFile, mkdir, readFile, access } from 'fs/promises';
+import { constants } from 'fs';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -375,6 +376,47 @@ if (process.env.NODE_ENV === 'production') {
 // Proxy endpoint for letterboxd-list-radarr API
 app.get('/api/watchlist/:username', async (req, res) => {
   const { username } = req.params;
+  
+  // First, check if enriched data exists
+  try {
+    const enrichedDir = join(__dirname, 'watchlist-data', 'enriched');
+    const enrichedFile = join(enrichedDir, `${username}-watchlist.json`);
+    
+    try {
+      await access(enrichedFile, constants.F_OK);
+      // File exists, load and return enriched data
+      console.log(`[${new Date().toISOString()}] [ENRICHED] Loading enriched data from ${enrichedFile}`);
+      const enrichedData = JSON.parse(await readFile(enrichedFile, 'utf-8'));
+      
+      // Ensure data array exists
+      if (!enrichedData.data || !Array.isArray(enrichedData.data)) {
+        throw new Error('Enriched data does not contain a valid data array');
+      }
+      
+      // Convert enriched data format to API response format
+      const films = enrichedData.data.map((item) => ({
+        title: item.title,
+        release_year: item.year,
+        imdb_id: item.imdbId,
+        clean_title: item.cleanTitle,
+        tmdbId: item.tmdbId,
+        tmdb_id: item.tmdbId,
+        posterUrl: item.posterUrl || null,
+        poster: item.posterUrl || null,
+        images: item.posterUrl ? [{ url: item.posterUrl }] : undefined,
+      }));
+      
+      console.log(`[${new Date().toISOString()}] [ENRICHED] Returning ${films.length} enriched films for ${username} (${films.filter(f => f.posterUrl).length} with posters)`);
+      return res.json(films);
+    } catch (fileError) {
+      // Enriched file doesn't exist, continue to API
+      console.log(`[${new Date().toISOString()}] [ENRICHED] No enriched data found for ${username}, falling back to API`);
+    }
+  } catch (error) {
+    // Error checking for enriched data, continue to API
+    console.log(`[${new Date().toISOString()}] [ENRICHED] Error checking enriched data, falling back to API:`, error);
+  }
+  
   // Use local service if available, otherwise fall back to hosted version
   const WATCHLIST_API_BASE = process.env.WATCHLIST_API_BASE || 'https://letterboxd-list-radarr.onrender.com';
   const apiUrl = `${WATCHLIST_API_BASE}/${username}/watchlist/`;
