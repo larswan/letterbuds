@@ -96,9 +96,10 @@ export function MatchResults({ result, usernames, profiles, onReset }: MatchResu
                   
                   return (
                     <div key={groupIndex} className="user-group">
-                      <h3 className="group-heading">
-                        <span className="number">{group.filmCount}</span> {group.filmCount === 1 ? 'film' : 'films'} in common
-                      </h3>
+                      <div className="group-heading">
+                        <span className="number">{group.filmCount}</span>
+                        <span className="count-label">{group.filmCount === 1 ? 'film' : 'films'} in common</span>
+                      </div>
                       <h4 className="group-subheading">{userNames}</h4>
                       <div className="films-list">
                         {group.commonFilms.map((film, index) => (
@@ -118,7 +119,11 @@ export function MatchResults({ result, usernames, profiles, onReset }: MatchResu
 }
 
 function FilmCard({ film }: { film: Film }) {
-  return (
+  const letterboxdUrl = film.cleanTitle 
+    ? `https://letterboxd.com${film.cleanTitle}`
+    : null;
+
+  const cardContent = (
     <div className="film-card">
       {film.posterUrl && (
         <img 
@@ -136,4 +141,19 @@ function FilmCard({ film }: { film: Film }) {
       </div>
     </div>
   );
+
+  if (letterboxdUrl) {
+    return (
+      <a 
+        href={letterboxdUrl} 
+        target="_blank" 
+        rel="noopener noreferrer"
+        className="film-card-link"
+      >
+        {cardContent}
+      </a>
+    );
+  }
+
+  return cardContent;
 }

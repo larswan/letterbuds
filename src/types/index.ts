@@ -3,6 +3,17 @@ export interface Film {
   year?: number;
   tmdbId?: number;
   posterUrl?: string;
+  imdbId?: string;
+  cleanTitle?: string; // For Letterboxd links
+  // Enriched data from OMDb
+  plot?: string;
+  director?: string;
+  cast?: string[];
+  genre?: string[];
+  rating?: string;
+  runtime?: string;
+  // Enriched data from TMDB (for trailers)
+  trailerUrl?: string;
 }
 
 export interface WatchlistResponse {

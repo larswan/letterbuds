@@ -3,6 +3,11 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import cors from 'cors';
 import { load } from 'cheerio';
+import dotenv from 'dotenv';
+import { writeFile, mkdir } from 'fs/promises';
+
+// Load environment variables from .env file
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -12,6 +17,9 @@ const PORT = process.env.PORT || 3000;
 
 // Enable CORS for all routes
 app.use(cors());
+
+// Parse JSON request bodies
+app.use(express.json());
 
 // Proxy endpoint for fetching following list
 app.get('/api/following/:username', async (req, res) => {
@@ -141,12 +149,40 @@ app.get('/api/following/:username', async (req, res) => {
       const html = await response.text();
       console.log(`[${new Date().toISOString()}] [PROXY] Received HTML response, length: ${html.length} characters`);
       
+      // Check for Cloudflare challenge pages first
+      const isCloudflareChallenge = html.includes('challenge-platform') || 
+                                     html.includes('cf-browser-verification') ||
+                                     html.includes('Just a moment') ||
+                                     html.includes('Checking your browser') ||
+                                     html.includes('DDoS protection by Cloudflare') ||
+                                     html.includes('cf-challenge') ||
+                                     (html.includes('cloudflare') && html.length < 50000); // Cloudflare pages are usually small
+      
+      if (isCloudflareChallenge) {
+        console.warn(`[${new Date().toISOString()}] [PROXY] Cloudflare challenge detected in response`);
+        return res.status(403).json({ 
+          error: 'Access blocked by Cloudflare protection. Letterboxd is using anti-bot measures.',
+          suggestion: 'This feature may not work reliably due to Letterboxd\'s anti-scraping measures. You can still manually add usernames to compare watchlists.',
+          details: 'Cloudflare challenge page detected'
+        });
+      }
+      
       // Check if this is actually a following page (not an error page)
       const hasFollowingContent = html.includes('person-summary') || html.includes('col-member') || html.includes('table-person');
       console.log(`[${new Date().toISOString()}] [PROXY] HTML contains following page markers: ${hasFollowingContent}`);
       
       if (!hasFollowingContent) {
         console.warn(`[${new Date().toISOString()}] [PROXY] Warning: HTML doesn't appear to be a following page. First 500 chars:`, html.substring(0, 500));
+        
+        // Check if it's an error page or login required
+        if (html.includes('Sign in') || html.includes('log in') || html.includes('login')) {
+          return res.status(403).json({ 
+            error: 'Following page requires authentication',
+            suggestion: 'This user\'s following list may be private or require login.',
+            username
+          });
+        }
+        
         return res.status(404).json({ 
           error: 'Following page not found or has unexpected structure',
           username
@@ -278,21 +314,83 @@ app.get('/api/following/:username', async (req, res) => {
   }
 });
 
+// Health check endpoint (production only) - tests scraping capability
+if (process.env.NODE_ENV === 'production') {
+  app.get('/health', async (req, res) => {
+    const testUsername = 'larswan';
+    const WATCHLIST_API_BASE = process.env.WATCHLIST_API_BASE || 'https://letterboxd-list-radarr.onrender.com';
+    const testUrl = `${WATCHLIST_API_BASE}/${testUsername}/watchlist/`;
+    
+    console.log(`[${new Date().toISOString()}] [HEALTH] Running health check - testing ${testUrl}`);
+    
+    // Create timeout promise
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Health check timeout after 10 seconds')), 10000);
+    });
+    
+    try {
+      const fetchPromise = fetch(testUrl, {
+        headers: {
+          'User-Agent': 'curl/7.68.0',
+        },
+      });
+      
+      const response = await Promise.race([fetchPromise, timeoutPromise]);
+      
+      if (response.ok) {
+        const data = await response.json();
+        const filmCount = Array.isArray(data) ? data.length : (data.movies?.length || data.items?.length || 0);
+        console.log(`[${new Date().toISOString()}] [HEALTH] ✓ Health check passed - ${filmCount} films found`);
+        res.status(200).json({ 
+          status: 'healthy', 
+          timestamp: new Date().toISOString(),
+          testUser: testUsername,
+          filmCount,
+          apiBase: WATCHLIST_API_BASE
+        });
+      } else {
+        console.error(`[${new Date().toISOString()}] [HEALTH] ✗ Health check failed - ${response.status} ${response.statusText}`);
+        res.status(503).json({ 
+          status: 'unhealthy', 
+          timestamp: new Date().toISOString(),
+          testUser: testUsername,
+          error: `${response.status} ${response.statusText}`,
+          apiBase: WATCHLIST_API_BASE
+        });
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error(`[${new Date().toISOString()}] [HEALTH] ✗ Health check error:`, errorMsg);
+      res.status(503).json({ 
+        status: 'unhealthy', 
+        timestamp: new Date().toISOString(),
+        testUser: testUsername,
+        error: errorMsg,
+        apiBase: WATCHLIST_API_BASE
+      });
+    }
+  });
+}
+
 // Proxy endpoint for letterboxd-list-radarr API
 app.get('/api/watchlist/:username', async (req, res) => {
   const { username } = req.params;
-  const apiUrl = `https://letterboxd-list-radarr.onrender.com/${username}/watchlist/`;
+  // Use local service if available, otherwise fall back to hosted version
+  const WATCHLIST_API_BASE = process.env.WATCHLIST_API_BASE || 'https://letterboxd-list-radarr.onrender.com';
+  const apiUrl = `${WATCHLIST_API_BASE}/${username}/watchlist/`;
   
   console.log(`[${new Date().toISOString()}] [PROXY] Proxying request for ${username} to ${apiUrl}`);
   
-  // Retry logic for rate limiting
-  const maxRetries = 2;
+  // Retry logic for rate limiting and service unavailability
+  const maxRetries = 3; // Increased retries for 503 errors
   let lastError = null;
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (attempt > 0) {
-      // Wait before retry (exponential backoff)
-      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+      // Wait before retry (exponential backoff with longer delays for 503)
+      const baseDelay = Math.min(2000 * Math.pow(2, attempt - 1), 10000);
+      const jitter = Math.floor(Math.random() * 1000); // Add randomness to avoid thundering herd
+      const delay = baseDelay + jitter;
       console.log(`[${new Date().toISOString()}] [PROXY] Retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries + 1})`);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
@@ -317,8 +415,10 @@ app.get('/api/watchlist/:username', async (req, res) => {
         console.error(`[${new Date().toISOString()}] [PROXY] Error response body:`, errorText);
         
         // Retry on 403, 429, or 503 (rate limiting or service unavailable)
+        // For 503, always retry (service might be temporarily down)
         if ((response.status === 403 || response.status === 429 || response.status === 503) && attempt < maxRetries) {
           lastError = { status: response.status, text: errorText };
+          console.log(`[${new Date().toISOString()}] [PROXY] Got ${response.status}, will retry (attempt ${attempt + 1}/${maxRetries + 1})`);
           continue; // Retry
         }
         
@@ -357,6 +457,33 @@ app.get('/api/watchlist/:username', async (req, res) => {
       
       const data = await response.json();
       console.log(`[${new Date().toISOString()}] [PROXY] Successfully proxied data for ${username}, received ${Array.isArray(data) ? data.length : 'object'} items`);
+      
+      // Write watchlist data to file for inspection
+      try {
+        const outputDir = join(__dirname, 'watchlist-data');
+        // Create directory if it doesn't exist
+        try {
+          await mkdir(outputDir, { recursive: true });
+        } catch (e) {
+          // Directory might already exist, that's fine
+        }
+        
+        const outputFile = join(outputDir, `${username}-watchlist.json`);
+        const outputData = {
+          username,
+          timestamp: new Date().toISOString(),
+          apiUrl,
+          data: data,
+          itemCount: Array.isArray(data) ? data.length : (data.movies?.length || data.items?.length || 0),
+        };
+        
+        await writeFile(outputFile, JSON.stringify(outputData, null, 2), 'utf-8');
+        console.log(`[${new Date().toISOString()}] [PROXY] Wrote watchlist data to ${outputFile}`);
+      } catch (fileError) {
+        // Don't fail the request if file write fails
+        console.error(`[${new Date().toISOString()}] [PROXY] Failed to write watchlist data to file:`, fileError);
+      }
+      
       return res.json(data);
       
     } catch (error) {
@@ -376,6 +503,41 @@ app.get('/api/watchlist/:username', async (req, res) => {
         });
       }
     }
+  }
+});
+
+// Endpoint to save enriched film data
+app.post('/api/enrich-and-save', async (req, res) => {
+  const { username, films } = req.body;
+  
+  if (!username || !films) {
+    return res.status(400).json({ error: 'Username and films are required' });
+  }
+  
+  try {
+    const outputDir = join(__dirname, 'enriched-data');
+    await mkdir(outputDir, { recursive: true });
+    
+    const enrichedFile = join(outputDir, `${username}-enriched.json`);
+    const enrichedData = {
+      username,
+      timestamp: new Date().toISOString(),
+      filmCount: films.length,
+      films
+    };
+    
+    await writeFile(
+      enrichedFile,
+      JSON.stringify(enrichedData, null, 2),
+      'utf-8'
+    );
+    
+    console.log(`[${new Date().toISOString()}] [ENRICH] Wrote enriched data to ${enrichedFile}`);
+    res.json({ success: true, file: enrichedFile, filmCount: films.length });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[${new Date().toISOString()}] [ENRICH] Error:`, errorMessage);
+    res.status(500).json({ error: 'Failed to save enriched data', message: errorMessage });
   }
 });
 

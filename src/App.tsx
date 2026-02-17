@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { WatchlistForm } from './components/WatchlistForm';
 import { MatchResults } from './components/MatchResults';
 import { LoadingSpinner } from './components/LoadingSpinner';
-import { fetchWatchlist, fetchUserProfile, fetchFollowing } from './services/letterboxdService';
+import { fetchWatchlist, fetchUserProfile } from './services/letterboxdService';
 import { findCommonFilmsMultiUser } from './services/matchService';
-import { MultiUserMatchResult, UserProfile } from './types';
+import { enrichFilms } from './services/filmEnrichmentService';
+import { sessionCache } from './services/cacheService';
+import { MultiUserMatchResult, UserProfile, Film } from './types';
 import './styles/main.scss';
 
 function App() {
@@ -42,11 +44,26 @@ function App() {
         }
         
         try {
-          // Fetch watchlist and profile in parallel for the same user
-          const [films, profile] = await Promise.all([
-            fetchWatchlist(username),
-            fetchUserProfile(username),
-          ]);
+          // Check cache first
+          let films = sessionCache.getWatchlist(username);
+          let profile = sessionCache.getProfile(username);
+          
+          // Fetch from API if not in cache
+          if (!films) {
+            console.log(`[${new Date().toISOString()}] [CACHE] Cache miss for ${username} watchlist, fetching...`);
+            films = await fetchWatchlist(username);
+            sessionCache.setWatchlist(username, films);
+          } else {
+            console.log(`[${new Date().toISOString()}] [CACHE] Cache hit for ${username} watchlist (${films.length} films)`);
+          }
+          
+          if (!profile) {
+            console.log(`[${new Date().toISOString()}] [CACHE] Cache miss for ${username} profile, fetching...`);
+            profile = await fetchUserProfile(username);
+            sessionCache.setProfile(username, profile);
+          } else {
+            console.log(`[${new Date().toISOString()}] [CACHE] Cache hit for ${username} profile`);
+          }
           
           userFilms.push({ username, films });
           userProfiles.push(profile);
@@ -84,6 +101,9 @@ function App() {
       const matchResult = findCommonFilmsMultiUser(userFilms);
       setResult(matchResult);
       setProfiles(userProfiles);
+      
+      // Start enrichment in background (don't block UI) - only enrich common films
+      enrichCommonFilmsInBackground(matchResult);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
       setError(errorMessage);
@@ -102,49 +122,124 @@ function App() {
     setFormKey(prev => prev + 1);
   };
 
-  // Test if following scraper works on app load
-  useEffect(() => {
-    const testFollowingScraper = async () => {
-      const testUsernames = ['jstoobs', 'larswan'];
-      console.log(`[${new Date().toISOString()}] [TEST] Testing following scraper with usernames: ${testUsernames.join(', ')}`);
-      
-      let successCount = 0;
-      
-      for (const username of testUsernames) {
-        try {
-          // Try to fetch following list with a timeout
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Timeout')), 10000)
-          );
-          
-          const fetchPromise = fetchFollowing(username);
-          await Promise.race([fetchPromise, timeoutPromise]);
-          
-          // If we get here, it worked
-          successCount++;
-          console.log(`[${new Date().toISOString()}] [TEST] ✓ Following scraper works for ${username}`);
-          
-          // If at least one works, enable the feature
-          if (successCount >= 1) {
-            setFollowingFeatureEnabled(true);
-            console.log(`[${new Date().toISOString()}] [TEST] ✓ Following feature enabled (${successCount}/${testUsernames.length} tests passed)`);
-            return; // Early exit if we get one success
-          }
-        } catch (err) {
-          const errorMsg = err instanceof Error ? err.message : String(err);
-          console.log(`[${new Date().toISOString()}] [TEST] ✗ Following scraper failed for ${username}: ${errorMsg}`);
-        }
-      }
-      
-      // If we get here, all tests failed
-      if (successCount === 0) {
-        setFollowingFeatureEnabled(false);
-        console.log(`[${new Date().toISOString()}] [TEST] ✗ Following feature disabled (0/${testUsernames.length} tests passed)`);
-      }
-    };
+  // Enrich only common films in background after results are shown
+  const enrichCommonFilmsInBackground = async (matchResult: MultiUserMatchResult) => {
+    // Collect all unique common films from all groups
+    const commonFilmsSet = new Map<string, Film>();
     
-    // Run test in background (don't block UI)
-    testFollowingScraper();
+    matchResult.userGroups.forEach(group => {
+      group.commonFilms.forEach(film => {
+        const key = `${film.title.toLowerCase().trim()}-${film.year || 'unknown'}`;
+        if (!commonFilmsSet.has(key)) {
+          commonFilmsSet.set(key, film);
+        }
+      });
+    });
+    
+    const commonFilms = Array.from(commonFilmsSet.values());
+    
+    if (commonFilms.length === 0) {
+      console.log(`[${new Date().toISOString()}] [ENRICH] No common films to enrich`);
+      return;
+    }
+    
+    // Check cache for enriched data first
+    const cacheKey = `common-${matchResult.userGroups.map(g => g.usernames.sort().join('-')).sort().join('_')}`;
+    let cachedEnriched = sessionCache.getEnrichedData(cacheKey);
+    
+    if (cachedEnriched) {
+      console.log(`[${new Date().toISOString()}] [ENRICH] Using cached enriched data for ${cachedEnriched.length} films`);
+      // Update result with cached enriched data
+      setResult(prevResult => {
+        if (!prevResult) return prevResult;
+        
+        return {
+          ...prevResult,
+          userGroups: prevResult.userGroups.map(group => ({
+            ...group,
+            commonFilms: sessionCache.mergeEnrichedDataIntoFilms(group.commonFilms, cachedEnriched!),
+          })),
+        };
+      });
+      return;
+    }
+    
+    // Check if we need to enrich (some films might already be enriched)
+    const filmsToEnrich = commonFilms.filter(film => !film.posterUrl && !film.plot && film.imdbId);
+    
+    if (filmsToEnrich.length === 0) {
+      console.log(`[${new Date().toISOString()}] [ENRICH] No films need enrichment (missing IMDb IDs or already enriched)`);
+      return;
+    }
+    
+    console.log(`[${new Date().toISOString()}] [ENRICH] Starting background enrichment for ${filmsToEnrich.length} common films...`);
+    
+    try {
+      // Enrich films that need it
+      const enrichedFilms = await enrichFilms(filmsToEnrich);
+      
+      // Merge enriched data back into original common films
+      const enrichedMap = new Map<string, Film>();
+      enrichedFilms.forEach(film => {
+        const key = `${film.title.toLowerCase().trim()}-${film.year || 'unknown'}`;
+        enrichedMap.set(key, film);
+      });
+      
+      const allEnrichedCommonFilms = commonFilms.map(film => {
+        const key = `${film.title.toLowerCase().trim()}-${film.year || 'unknown'}`;
+        const enriched = enrichedMap.get(key);
+        return enriched ? { ...film, ...enriched } : film;
+      });
+      
+      // Store enriched films in cache
+      sessionCache.setEnrichedData(cacheKey, allEnrichedCommonFilms);
+      
+      // Save enriched data to server
+      try {
+        const saveResponse = await fetch('/api/enrich-and-save', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            username: 'common-films',
+            films: allEnrichedCommonFilms,
+          }),
+        });
+        
+        if (saveResponse.ok) {
+          const saveData = await saveResponse.json();
+          console.log(`[${new Date().toISOString()}] [ENRICH] Saved enriched data for ${saveData.filmCount} common films`);
+        } else {
+          console.warn(`[${new Date().toISOString()}] [ENRICH] Failed to save enriched data`);
+        }
+      } catch (saveError) {
+        console.error(`[${new Date().toISOString()}] [ENRICH] Error saving enriched data:`, saveError);
+      }
+      
+      // Update the result with enriched data
+      setResult(prevResult => {
+        if (!prevResult) return prevResult;
+        
+        return {
+          ...prevResult,
+          userGroups: prevResult.userGroups.map(group => ({
+            ...group,
+            commonFilms: sessionCache.mergeEnrichedDataIntoFilms(group.commonFilms, allEnrichedCommonFilms),
+          })),
+        };
+      });
+      
+      console.log(`[${new Date().toISOString()}] [ENRICH] Background enrichment completed and UI updated`);
+    } catch (error) {
+      console.error(`[${new Date().toISOString()}] [ENRICH] Error enriching common films:`, error);
+    }
+  };
+
+  // Initialize following feature status - default to null (will be set by WatchlistForm)
+  useEffect(() => {
+    // Start with null (testing state) - WatchlistForm will test and update
+    setFollowingFeatureEnabled(null);
   }, []);
 
   return (
@@ -178,6 +273,7 @@ function App() {
             initialUsernames={usernames}
             initialProfiles={profiles}
             followingFeatureEnabled={followingFeatureEnabled}
+            onFollowingFeatureStatusChange={setFollowingFeatureEnabled}
           />
         )}
 

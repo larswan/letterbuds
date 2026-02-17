@@ -45,13 +45,34 @@ export function FollowingDropdown({ username, onSelectUser, disabled, isOpen: co
     const newIsOpen = !isOpen;
     
     if (newIsOpen && following.length === 0 && !isLoading) {
-      // Fetch following list when opening for the first time
       setIsLoading(true);
       setError(null);
       
       try {
+        // Check for cached results first
+        const cacheKey = `following-cache-${username}`;
+        const cachedData = sessionStorage.getItem(cacheKey);
+        
+        if (cachedData) {
+          try {
+            const parsed = JSON.parse(cachedData);
+            setFollowing(parsed.following || []);
+            setIsLoading(false);
+            return; // Use cached data, don't fetch again
+          } catch (e) {
+            // Cache parse error, fall through to fetch
+          }
+        }
+        
+        // No cache, fetch from API
         const followingList = await fetchFollowing(username);
         setFollowing(followingList);
+        
+        // Cache the results for this session
+        sessionStorage.setItem(cacheKey, JSON.stringify({
+          following: followingList,
+          timestamp: Date.now(),
+        }));
       } catch (err) {
         const error = err instanceof Error ? err : new Error('Failed to load following list');
         setError(error);

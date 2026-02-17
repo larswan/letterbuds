@@ -1,0 +1,25 @@
+version: "3.8"
+services:
+  redis:
+    image: redis:6.0
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+
+  letterboxd-scraper:
+    image: screeny05/letterboxd-list-radarr:latest
+    ports:
+      - "5000:5000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - PORT=5000
+      - LOG_LEVEL=info
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+

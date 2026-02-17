@@ -154,6 +154,9 @@ export async function fetchWatchlist(username: string): Promise<Film[]> {
         const year = movie.release_year || movie.year || movie.releaseYear;
         // API doesn't provide tmdbId directly, but has id (Letterboxd ID) and imdb_id
         const tmdbId = movie.tmdbId || movie.tmdb_id || movie.theMovieDbId;
+        // Extract IMDb ID and clean title
+        const imdbId = movie.imdb_id || undefined;
+        const cleanTitle = movie.clean_title || undefined;
         // API doesn't provide poster URLs in this format
         const posterUrl = movie.images?.[0]?.url || 
                          movie.posterUrl || 
@@ -165,6 +168,8 @@ export async function fetchWatchlist(username: string): Promise<Film[]> {
           year: year ? parseInt(String(year), 10) : undefined,
           tmdbId: tmdbId ? parseInt(String(tmdbId), 10) : undefined,
           posterUrl: posterUrl || undefined,
+          imdbId: imdbId || undefined,
+          cleanTitle: cleanTitle || undefined,
         };
       })
       .filter((film: Film) => film.title.length > 0); // Filter out empty titles
@@ -230,47 +235,92 @@ export async function fetchUserProfile(username: string, throwOnError: boolean =
   }
 }
 
-export async function fetchFollowing(username: string): Promise<FollowingUser[]> {
+/**
+ * Check if user has Letterboxd session cookies (might help with direct fetch)
+ */
+function hasLetterboxdSession(): boolean {
+  if (typeof document === 'undefined') return false;
+  const cookies = document.cookie;
+  return cookies.includes('letterboxd') || 
+         cookies.includes('lbxd') ||
+         cookies.includes('_letterboxd');
+}
+
+export async function fetchFollowing(username: string, silent: boolean = false): Promise<FollowingUser[]> {
   const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] [FETCH] Fetching following list for ${username}...`);
+  if (!silent) {
+    console.log(`[${timestamp}] [FETCH] Fetching following list for ${username}...`);
+  }
 
   // Try direct browser fetch first (uses user's browser context, cookies, etc.)
   // This may bypass Letterboxd's anti-scraping if the user is logged in
   const directUrl = `https://letterboxd.com/${username}/following/`;
   
+  // Check if user might be logged in (has Letterboxd cookies)
+  const hasSession = hasLetterboxdSession();
+  if (!silent && hasSession) {
+    console.log(`[${timestamp}] [FETCH] User appears to have Letterboxd session cookies, trying direct fetch...`);
+  }
+  
   try {
-    console.log(`[${timestamp}] [FETCH] Attempting direct browser fetch from ${directUrl}...`);
+    if (!silent) {
+      console.log(`[${timestamp}] [FETCH] Attempting direct browser fetch from ${directUrl}...`);
+    }
     const directResponse = await fetch(directUrl, {
       method: 'GET',
       credentials: 'include', // Include cookies if user is logged into Letterboxd
       mode: 'cors', // Try CORS first
     });
     
-    console.log(`[${timestamp}] [FETCH] Direct fetch response status: ${directResponse.status} ${directResponse.statusText}`);
+    if (!silent) {
+      console.log(`[${timestamp}] [FETCH] Direct fetch response status: ${directResponse.status} ${directResponse.statusText}`);
+    }
     
     if (directResponse.ok) {
       const html = await directResponse.text();
-      console.log(`[${timestamp}] [FETCH] Direct fetch HTML length: ${html.length} characters`);
+      if (!silent) {
+        console.log(`[${timestamp}] [FETCH] Direct fetch HTML length: ${html.length} characters`);
+      }
       const following = parseFollowingHTML(html);
-      console.log(`[${new Date().toISOString()}] [SUCCESS] Retrieved ${following.length} following users via direct browser fetch`);
+      if (!silent) {
+        console.log(`[${new Date().toISOString()}] [SUCCESS] Retrieved ${following.length} following users via direct browser fetch`);
+      }
       return following;
     } else {
-      console.log(`[${timestamp}] [FETCH] Direct fetch failed with status ${directResponse.status}, falling back to server proxy...`);
+      if (!silent) {
+        console.log(`[${timestamp}] [FETCH] Direct fetch failed with status ${directResponse.status}, falling back to server proxy...`);
+      }
     }
   } catch (corsError) {
-    // CORS blocked - fall back to server proxy
+    // CORS blocked - this is expected and normal, fall back to server proxy
     const errorMsg = corsError instanceof Error ? corsError.message : String(corsError);
-    console.log(`[${timestamp}] [FETCH] Direct fetch blocked by CORS: ${errorMsg}, falling back to server proxy...`);
+    
+    // Check if it's actually a CORS error or a network failure
+    const isCorsError = errorMsg.includes('CORS') || 
+                        errorMsg.includes('Access-Control') ||
+                        errorMsg.includes('Failed to fetch') ||
+                        errorMsg.includes('ERR_FAILED');
+    
+    if (!silent && isCorsError) {
+      console.log(`[${timestamp}] [FETCH] Direct fetch blocked by CORS (expected), falling back to server proxy...`);
+    } else if (!silent) {
+      console.log(`[${timestamp}] [FETCH] Direct fetch error: ${errorMsg}, falling back to server proxy...`);
+    }
+    // Continue to server proxy fallback
   }
 
   // Fall back to server proxy
   let serverError: Error | null = null;
   try {
     const url = `${API_BASE_URL}/following/${username}`;
-    console.log(`[${timestamp}] [FETCH] Fetching from server proxy: ${url}`);
+    if (!silent) {
+      console.log(`[${timestamp}] [FETCH] Fetching from server proxy: ${url}`);
+    }
     const response = await fetch(url);
     
-    console.log(`[${timestamp}] [FETCH] Server proxy response status: ${response.status} ${response.statusText}`);
+    if (!silent) {
+      console.log(`[${timestamp}] [FETCH] Server proxy response status: ${response.status} ${response.statusText}`);
+    }
 
     if (!response.ok) {
       let errorData: any = null;
@@ -281,14 +331,18 @@ export async function fetchFollowing(username: string): Promise<FollowingUser[]>
       }
       
       if (response.status === 404) {
-        console.error(`[${timestamp}] [ERROR] User ${username} not found or following list is empty`);
+        if (!silent) {
+          console.error(`[${timestamp}] [ERROR] User ${username} not found or following list is empty`);
+        }
         throw new Error(`User "${username}" not found or following list is empty`);
       }
       
       if (response.status === 403) {
         const errorMsg = errorData?.error || 'Access forbidden. Letterboxd may be blocking automated requests.';
         const suggestion = errorData?.suggestion || 'You can still manually add usernames to compare watchlists.';
-        console.error(`[${timestamp}] [ERROR] Access forbidden for ${username}:`, errorMsg);
+        if (!silent) {
+          console.error(`[${timestamp}] [ERROR] Access forbidden for ${username}:`, errorMsg);
+        }
         const fullError = new Error(errorMsg);
         (fullError as any).suggestion = suggestion;
         throw fullError;
@@ -299,30 +353,74 @@ export async function fetchFollowing(username: string): Promise<FollowingUser[]>
     }
 
     const data = await response.json();
-    console.log(`[${timestamp}] [FETCH] Server proxy response data:`, {
-      hasFollowing: !!data.following,
-      followingLength: data.following ? data.following.length : 0,
-      dataKeys: Object.keys(data)
-    });
+    if (!silent) {
+      console.log(`[${timestamp}] [FETCH] Server proxy response data:`, {
+        hasFollowing: !!data.following,
+        followingLength: data.following ? data.following.length : 0,
+        dataKeys: Object.keys(data)
+      });
+    }
+    
+    // Check if response indicates blocking
+    if (data.error) {
+      const errorMsg = data.error || 'Failed to fetch following list';
+      const suggestion = data.suggestion || 'You can still manually add usernames to compare watchlists.';
+      
+      // Check if it's a Cloudflare block
+      if (errorMsg.includes('Cloudflare') || data.details?.includes('Cloudflare')) {
+        if (!silent) {
+          console.error(`[${timestamp}] [ERROR] Cloudflare block detected: ${errorMsg}`);
+        }
+        const fullError = new Error(errorMsg);
+        (fullError as any).suggestion = suggestion;
+        (fullError as any).isCloudflareBlock = true;
+        throw fullError;
+      }
+      
+      // Other blocking errors
+      if (response.status === 403 || errorMsg.includes('blocked') || errorMsg.includes('forbidden')) {
+        if (!silent) {
+          console.error(`[${timestamp}] [ERROR] Access blocked: ${errorMsg}`);
+        }
+        const fullError = new Error(errorMsg);
+        (fullError as any).suggestion = suggestion;
+        throw fullError;
+      }
+    }
     
     const following = data.following || [];
     
+    // Validate that we got actual data, not just an empty array from a blocked request
     if (following.length === 0) {
-      console.warn(`[${timestamp}] [FETCH] Warning: Server returned empty following array. Response data:`, data);
+      // Check if this might be a block vs. actually empty list
+      if (data.error || data.details) {
+        const errorMsg = data.error || 'Following list appears to be empty or inaccessible';
+        throw new Error(errorMsg);
+      }
+      
+      if (!silent) {
+        console.warn(`[${timestamp}] [FETCH] Warning: Server returned empty following array. This might be an empty list or a block.`);
+      }
     }
     
-    console.log(`[${new Date().toISOString()}] [SUCCESS] Retrieved ${following.length} following users for ${username}`);
+    if (!silent) {
+      console.log(`[${new Date().toISOString()}] [SUCCESS] Retrieved ${following.length} following users for ${username}`);
+    }
     
     return following;
   } catch (error) {
     serverError = error instanceof Error ? error : new Error(String(error));
-    console.log(`[${timestamp}] [FETCH] Server proxy failed, trying CORS proxy as last resort...`);
+    if (!silent) {
+      console.log(`[${timestamp}] [FETCH] Server proxy failed, trying CORS proxy as last resort...`);
+    }
     
     // Last resort: Try a public CORS proxy
     // Note: These services may have rate limits or be unreliable
     try {
       const corsProxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(directUrl)}`;
-      console.log(`[${timestamp}] [FETCH] Attempting CORS proxy fetch...`);
+      if (!silent) {
+        console.log(`[${timestamp}] [FETCH] Attempting CORS proxy fetch...`);
+      }
       
       const proxyResponse = await fetch(corsProxyUrl, {
         method: 'GET',
@@ -332,15 +430,19 @@ export async function fetchFollowing(username: string): Promise<FollowingUser[]>
       if (proxyResponse.ok) {
         const html = await proxyResponse.text();
         const following = parseFollowingHTML(html);
-        console.log(`[${new Date().toISOString()}] [SUCCESS] Retrieved ${following.length} following users via CORS proxy`);
+        if (!silent) {
+          console.log(`[${new Date().toISOString()}] [SUCCESS] Retrieved ${following.length} following users via CORS proxy`);
+        }
         return following;
       } else {
         throw new Error(`CORS proxy returned ${proxyResponse.status}`);
       }
     } catch (proxyError) {
       // All methods failed - throw the original server error
-      const timestamp = new Date().toISOString();
-      console.error(`[${timestamp}] [ERROR] All fetch methods failed for ${username}`);
+      if (!silent) {
+        const timestamp = new Date().toISOString();
+        console.error(`[${timestamp}] [ERROR] All fetch methods failed for ${username}`);
+      }
       throw serverError;
     }
   }

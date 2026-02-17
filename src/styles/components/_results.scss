@@ -144,10 +144,20 @@
     }
     
     .group-heading {
-      margin: 0 0 $spacing-xs 0;
-      color: $accent-primary;
-      font-size: 1.3rem;
-      font-weight: 600;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.25rem;
+      margin: 0 0 $spacing-md 0;
+      
+      .number {
+        line-height: 1;
+      }
+      
+      .count-label {
+        color: $text-secondary;
+        font-size: 0.9rem;
+      }
     }
     
     .group-subheading {
@@ -167,6 +177,17 @@
     .films-list {
       margin-top: $spacing-md;
     }
+  }
+}
+
+.film-card-link {
+  text-decoration: none;
+  display: block;
+  color: inherit;
+  
+  &:hover .film-card {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
   }
 }
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, FormEvent, KeyboardEvent } from 'react';
 import { FaCheck, FaTimes, FaPlus } from 'react-icons/fa';
-import { fetchUserProfile } from '../services/letterboxdService';
+import { fetchUserProfile, fetchFollowing } from '../services/letterboxdService';
 import { UserProfile, FollowingUser } from '../types';
 import { FollowingDropdown } from './FollowingDropdown';
 import '../styles/components/_form.scss';
@@ -11,6 +11,7 @@ interface WatchlistFormProps {
   initialUsernames?: string[];
   initialProfiles?: (UserProfile | null)[];
   followingFeatureEnabled?: boolean | null; // null = testing, true/false = result
+  onFollowingFeatureStatusChange?: (enabled: boolean) => void;
 }
 
 interface UserInput {
@@ -67,6 +68,7 @@ export function WatchlistForm({
   initialUsernames = [],
   initialProfiles = [],
   followingFeatureEnabled = null,
+  onFollowingFeatureStatusChange,
 }: WatchlistFormProps) {
   const [userInputs, setUserInputs] = useState<UserInput[]>(() => {
     // Initialize with at least 2 users, or use initial values
@@ -93,6 +95,7 @@ export function WatchlistForm({
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number>(-1);
   const [openFollowingDropdown, setOpenFollowingDropdown] = useState<string | null>(null);
+  const [hasTestedFollowing, setHasTestedFollowing] = useState(false);
   
   // Debounce timers for each input
   const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -117,6 +120,72 @@ export function WatchlistForm({
       setNextId(initialUsernames.length);
     }
   }, [initialUsernames, initialProfiles]);
+
+  // Test following feature when first username is validated (once per session)
+  useEffect(() => {
+    // Check if we've already tested this session
+    if (hasTestedFollowing) return;
+    
+    // Find the first valid user
+    const firstValidUser = userInputs.find(input => input.validation.isValid === true);
+    
+    if (firstValidUser && firstValidUser.username) {
+      // Mark as tested to prevent multiple tests
+      setHasTestedFollowing(true);
+      
+      // Run background test
+      const testFollowingFeature = async () => {
+        try {
+          const followingList = await fetchFollowing(firstValidUser.username, true); // Silent mode
+          
+          // Validate we got actual data (not just an empty array from a blocked request)
+          // An empty array is valid if the user has no following, but we should verify
+          // the request actually succeeded vs. being blocked
+          if (Array.isArray(followingList)) {
+            // Success! Cache the results and enable feature
+            sessionStorage.setItem(`following-cache-${firstValidUser.username}`, JSON.stringify({
+              following: followingList,
+              timestamp: Date.now(),
+            }));
+            
+            console.log(`[${new Date().toISOString()}] [FOLLOWING_TEST] Feature test succeeded: Retrieved ${followingList.length} following users for ${firstValidUser.username}`);
+            
+            if (onFollowingFeatureStatusChange) {
+              onFollowingFeatureStatusChange(true);
+            }
+          } else {
+            // Invalid response format
+            throw new Error('Invalid response format from following API');
+          }
+        } catch (err) {
+          // Test failed - check what kind of error it was
+          const error = err instanceof Error ? err : new Error(String(err));
+          const errorMsg = error.message.toLowerCase();
+          
+          // Check if it's a Cloudflare block vs. other error
+          const isBlocked = errorMsg.includes('cloudflare') || 
+                           errorMsg.includes('blocked') ||
+                           errorMsg.includes('forbidden') ||
+                           errorMsg.includes('anti-bot') ||
+                           (error as any).isCloudflareBlock;
+          
+          if (isBlocked) {
+            console.log(`[${new Date().toISOString()}] [FOLLOWING_TEST] Feature test failed: Blocked by Letterboxd/Cloudflare`);
+          } else {
+            console.log(`[${new Date().toISOString()}] [FOLLOWING_TEST] Feature test failed: ${error.message}`);
+          }
+          
+          // Disable feature
+          if (onFollowingFeatureStatusChange) {
+            onFollowingFeatureStatusChange(false);
+          }
+        }
+      };
+      
+      // Run in background (don't block UI)
+      testFollowingFeature();
+    }
+  }, [userInputs, hasTestedFollowing, onFollowingFeatureStatusChange]);
   
   // Cleanup debounce timers on unmount
   useEffect(() => {

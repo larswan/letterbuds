@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite",
     "dev:server": "node server.js",
+    "dev:scraper": "docker-compose up -d",
+    "dev:scraper:stop": "docker-compose down",
+    "dev:scraper:logs": "docker-compose logs -f letterboxd-scraper",
     "build": "tsc && vite build",
     "start": "node server.js",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
@@ -14,6 +17,7 @@
   "dependencies": {
     "cheerio": "^1.2.0",
     "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
     "express": "^4.22.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

@@ -9,77 +9,89 @@ export function LoadingSpinner({ currentUsername }: LoadingSpinnerProps) {
   const [displayMessage, setDisplayMessage] = useState<string>('');
   const [isVisible, setIsVisible] = useState(true);
   const lastUsernameRef = useRef<string | undefined>(undefined);
-  const messageStartTimeRef = useRef<number>(0);
-  const timeoutMessageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const showingTimeoutMessageRef = useRef<boolean>(false);
+  const messageCycleIndexRef = useRef<number>(0);
+  const cycleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Info messages to cycle through
+  const infoMessages = [
+    'Longer lists take more time to scrape',
+    'Letterboxd just doesn\'t want to make an API',
+    'Thank you to screeny05 for the scraper'
+  ];
 
   useEffect(() => {
-    // Clear any existing timeout
-    if (timeoutMessageTimerRef.current) {
-      clearTimeout(timeoutMessageTimerRef.current);
-      timeoutMessageTimerRef.current = null;
+    // Clear any existing timer
+    if (cycleTimerRef.current) {
+      clearTimeout(cycleTimerRef.current);
+      cycleTimerRef.current = null;
     }
 
     if (currentUsername) {
-      const newMessage = `Scraping ${currentUsername}'s watchlist`;
+      const usernameMessage = `Scraping ${currentUsername}'s watchlist`;
       
-      // If username changed, fade out old message, then fade in new
+      // If username changed, reset cycle and show username message
       if (currentUsername !== lastUsernameRef.current) {
-        showingTimeoutMessageRef.current = false;
+        messageCycleIndexRef.current = 0;
+        lastUsernameRef.current = currentUsername;
         
-        // Helper function to set up timeout timer
-        const setupTimeoutTimer = () => {
-          timeoutMessageTimerRef.current = setTimeout(() => {
-            if (currentUsername === lastUsernameRef.current && !showingTimeoutMessageRef.current) {
-              showingTimeoutMessageRef.current = true;
-              setIsVisible(false);
-              setTimeout(() => {
-                setDisplayMessage('Larger watchlists will take longer to scrape');
-                setIsVisible(true);
-                setTimeout(() => {
-                  setIsVisible(false);
-                  setTimeout(() => {
-                    setDisplayMessage(newMessage);
-                    setIsVisible(true);
-                    showingTimeoutMessageRef.current = false;
-                    messageStartTimeRef.current = Date.now();
-                  }, 300);
-                }, 3000);
-              }, 300);
+        // Show username message immediately
+        setDisplayMessage(usernameMessage);
+        setIsVisible(true);
+        
+        // Start the cycle
+        const cycleMessages = () => {
+          // Wait 5 seconds before showing first info message (username shows for 5s)
+          cycleTimerRef.current = setTimeout(() => {
+            if (currentUsername !== lastUsernameRef.current) {
+              return; // Username changed, stop cycling
             }
-          }, 3000);
+            
+            // Fade out username message
+            setIsVisible(false);
+            
+            setTimeout(() => {
+              // Show info message
+              const infoMessage = infoMessages[messageCycleIndexRef.current];
+              setDisplayMessage(infoMessage);
+              setIsVisible(true);
+              
+              // After 3 seconds, show username again
+              cycleTimerRef.current = setTimeout(() => {
+                if (currentUsername !== lastUsernameRef.current) {
+                  return;
+                }
+                
+                setIsVisible(false);
+                
+                setTimeout(() => {
+                  setDisplayMessage(usernameMessage);
+                  setIsVisible(true);
+                  
+                  // Move to next info message
+                  messageCycleIndexRef.current = (messageCycleIndexRef.current + 1) % infoMessages.length;
+                  
+                  // Continue cycling (username shows for 5s, then next info for 3s)
+                  cycleMessages();
+                }, 300);
+              }, 3000); // Info message shows for 3 seconds
+            }, 300);
+          }, 5000); // Username message shows for 5 seconds
         };
         
-        // If we have a previous message, fade it out first
-        if (lastUsernameRef.current !== undefined) {
-          setIsVisible(false);
-          setTimeout(() => {
-            setDisplayMessage(newMessage);
-            setIsVisible(true);
-            lastUsernameRef.current = currentUsername;
-            messageStartTimeRef.current = Date.now();
-            setupTimeoutTimer();
-          }, 300); // Standard fade transition timing (300ms)
-        } else {
-          // First message - show immediately
-          setDisplayMessage(newMessage);
-          setIsVisible(true);
-          lastUsernameRef.current = currentUsername;
-          messageStartTimeRef.current = Date.now();
-          setupTimeoutTimer();
-        }
+        // Start cycling after 5 seconds (first username message shows for 5s)
+        cycleMessages();
       }
     } else {
       // No username - clear message
       setDisplayMessage('');
       setIsVisible(false);
-      showingTimeoutMessageRef.current = false;
       lastUsernameRef.current = undefined;
+      messageCycleIndexRef.current = 0;
     }
 
     return () => {
-      if (timeoutMessageTimerRef.current) {
-        clearTimeout(timeoutMessageTimerRef.current);
+      if (cycleTimerRef.current) {
+        clearTimeout(cycleTimerRef.current);
       }
     };
   }, [currentUsername]);
