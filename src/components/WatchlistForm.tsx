@@ -97,6 +97,7 @@ export function WatchlistForm({
   // Debounce timers for each input
   const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const dropdownRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const suggestionItemRefs = useRef<Map<string, Map<number, HTMLLIElement>>>(new Map());
 
   // Update state when initial values change
   useEffect(() => {
@@ -146,6 +147,22 @@ export function WatchlistForm({
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [activeDropdown]);
+
+  // Scroll selected suggestion into view when index changes
+  useEffect(() => {
+    if (activeDropdown && selectedSuggestionIndex >= 0) {
+      const itemRefs = suggestionItemRefs.current.get(activeDropdown);
+      if (itemRefs) {
+        const selectedItem = itemRefs.get(selectedSuggestionIndex);
+        if (selectedItem) {
+          selectedItem.scrollIntoView({
+            behavior: 'smooth',
+            block: 'nearest',
+          });
+        }
+      }
+    }
+  }, [selectedSuggestionIndex, activeDropdown]);
 
   const validateUsername = async (username: string, userId: string, skipIfAlreadyValidated: boolean = false, showErrors: boolean = true) => {
     const trimmed = username.trim();
@@ -618,6 +635,7 @@ export function WatchlistForm({
                     dropdownRefs.current.set(input.id, el);
                   } else {
                     dropdownRefs.current.delete(input.id);
+                    suggestionItemRefs.current.delete(input.id);
                   }
                 }}
               >
@@ -625,6 +643,16 @@ export function WatchlistForm({
                   {getFilteredSuggestions(input.username, input.id).map((suggestion, index) => (
                     <li
                       key={suggestion}
+                      ref={(el) => {
+                        if (el) {
+                          if (!suggestionItemRefs.current.has(input.id)) {
+                            suggestionItemRefs.current.set(input.id, new Map());
+                          }
+                          suggestionItemRefs.current.get(input.id)?.set(index, el);
+                        } else {
+                          suggestionItemRefs.current.get(input.id)?.delete(index);
+                        }
+                      }}
                       className={index === selectedSuggestionIndex ? 'selected' : ''}
                       onMouseDown={(e) => {
                         e.preventDefault(); // Prevent blur
