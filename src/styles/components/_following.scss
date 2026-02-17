@@ -49,7 +49,7 @@
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: $border-radius;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-    z-index: 1000;
+    z-index: 2000; // Above all other elements including error messages
     max-height: 300px;
     overflow-y: auto;
     

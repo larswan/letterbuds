@@ -8,10 +8,14 @@ interface FollowingDropdownProps {
   profile: UserProfile;
   onSelectUser: (user: FollowingUser) => void;
   disabled?: boolean;
+  isOpen?: boolean;
+  onToggle?: (isOpen: boolean) => void;
+  userId: string;
 }
 
-export function FollowingDropdown({ username, onSelectUser, disabled }: FollowingDropdownProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export function FollowingDropdown({ username, onSelectUser, disabled, isOpen: controlledIsOpen, onToggle }: FollowingDropdownProps) {
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
+  const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
   const [isLoading, setIsLoading] = useState(false);
   const [following, setFollowing] = useState<FollowingUser[]>([]);
   const [error, setError] = useState<Error | null>(null);
@@ -21,7 +25,11 @@ export function FollowingDropdown({ username, onSelectUser, disabled }: Followin
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
+        if (onToggle) {
+          onToggle(false);
+        } else {
+          setInternalIsOpen(false);
+        }
       }
     }
 
@@ -29,12 +37,14 @@ export function FollowingDropdown({ username, onSelectUser, disabled }: Followin
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [isOpen]);
+  }, [isOpen, onToggle]);
 
   const handleToggle = async () => {
     if (disabled) return;
     
-    if (!isOpen && following.length === 0 && !isLoading) {
+    const newIsOpen = !isOpen;
+    
+    if (newIsOpen && following.length === 0 && !isLoading) {
       // Fetch following list when opening for the first time
       setIsLoading(true);
       setError(null);
@@ -51,12 +61,20 @@ export function FollowingDropdown({ username, onSelectUser, disabled }: Followin
       }
     }
     
-    setIsOpen(!isOpen);
+    if (onToggle) {
+      onToggle(newIsOpen);
+    } else {
+      setInternalIsOpen(newIsOpen);
+    }
   };
 
   const handleSelect = (user: FollowingUser) => {
     onSelectUser(user);
-    setIsOpen(false);
+    if (onToggle) {
+      onToggle(false);
+    } else {
+      setInternalIsOpen(false);
+    }
   };
 
   return (
@@ -69,7 +87,7 @@ export function FollowingDropdown({ username, onSelectUser, disabled }: Followin
         aria-expanded={isOpen}
         aria-haspopup="listbox"
       >
-        <span>Find Friends</span>
+        <span>{isLoading ? `Scraping ${username}'s following list` : 'Find Friends'}</span>
         {isLoading && <span className="spinner-small"></span>}
         <span className="dropdown-arrow">{isOpen ? '▲' : '▼'}</span>
       </button>

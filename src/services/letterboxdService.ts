@@ -83,11 +83,27 @@ export async function fetchWatchlist(username: string): Promise<Film[]> {
 
     if (!response.ok) {
       let errorData: any = null;
+      let errorText = '';
       try {
-        errorData = await response.json();
+        errorText = await response.text();
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          // Not JSON, use text as error data
+          errorData = { error: errorText };
+        }
       } catch (e) {
-        // If response is not JSON, use status text
+        // If response is not readable, use status text
+        errorText = response.statusText;
       }
+      
+      console.error(`[${timestamp}] [ERROR] Watchlist fetch failed for ${username}:`, {
+        status: response.status,
+        statusText: response.statusText,
+        errorData,
+        errorText: errorText.substring(0, 500), // First 500 chars
+        url: url,
+      });
       
       if (response.status === 404) {
         console.error(`[${timestamp}] [ERROR] User ${username} not found or watchlist is empty`);
@@ -112,7 +128,7 @@ export async function fetchWatchlist(username: string): Promise<Film[]> {
         throw new Error(errorMsg);
       }
       
-      const errorMsg = errorData?.error || `Failed to fetch watchlist: ${response.status} ${response.statusText}`;
+      const errorMsg = errorData?.error || errorData?.message || `Failed to fetch watchlist: ${response.status} ${response.statusText}`;
       throw new Error(errorMsg);
     }
 

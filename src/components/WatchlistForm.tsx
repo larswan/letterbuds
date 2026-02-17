@@ -30,6 +30,11 @@ interface UserValidationState {
 const STORAGE_KEY = 'letterboxd-usernames';
 const MAX_USERS = 10;
 
+function getOrdinalName(index: number): string {
+  const ordinals = ['First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth', 'Seventh', 'Eighth', 'Ninth', 'Tenth'];
+  return ordinals[index] || `${index + 1}th`;
+}
+
 function getStoredUsernames(): string[] {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -87,6 +92,7 @@ export function WatchlistForm({
   const [nextId, setNextId] = useState(userInputs.length);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number>(-1);
+  const [openFollowingDropdown, setOpenFollowingDropdown] = useState<string | null>(null);
   
   // Debounce timers for each input
   const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -95,6 +101,7 @@ export function WatchlistForm({
   // Update state when initial values change
   useEffect(() => {
     if (initialUsernames.length >= 2) {
+      // Always update to ensure validation state is preserved when resetting
       setUserInputs(initialUsernames.map((username, index) => ({
         id: `user-${index}`,
         username,
@@ -234,10 +241,25 @@ export function WatchlistForm({
   };
 
   // Get filtered suggestions for an input
-  const getFilteredSuggestions = (value: string): string[] => {
+  const getFilteredSuggestions = (value: string, currentUserId: string): string[] => {
     const trimmed = value.trim().toLowerCase();
-    if (!trimmed) return suggestions;
-    return suggestions.filter(s => s.toLowerCase().includes(trimmed));
+    
+    // Get all usernames currently in other fields (case-insensitive)
+    const existingUsernames = new Set(
+      userInputs
+        .filter(input => input.id !== currentUserId && input.username.trim())
+        .map(input => input.username.trim().toLowerCase())
+    );
+    
+    // Filter suggestions: match the value AND not already in another field
+    let filtered = suggestions.filter(s => {
+      const suggestionLower = s.toLowerCase();
+      const matchesValue = !trimmed || suggestionLower.includes(trimmed);
+      const notInOtherFields = !existingUsernames.has(suggestionLower);
+      return matchesValue && notInOtherFields;
+    });
+    
+    return filtered;
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>, userId: string) => {
@@ -248,7 +270,7 @@ export function WatchlistForm({
       e.preventDefault();
       if (selectedSuggestionIndex >= 0 && activeDropdown === userId) {
         // Select the highlighted suggestion
-        const filtered = getFilteredSuggestions(input.username);
+        const filtered = getFilteredSuggestions(input.username, userId);
         if (filtered[selectedSuggestionIndex]) {
           handleUsernameChange(filtered[selectedSuggestionIndex], userId);
           setActiveDropdown(null);
@@ -259,7 +281,7 @@ export function WatchlistForm({
       }
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      const filtered = getFilteredSuggestions(input.username);
+      const filtered = getFilteredSuggestions(input.username, userId);
       if (filtered.length > 0) {
         setActiveDropdown(userId);
         setSelectedSuggestionIndex(prev => 
@@ -269,7 +291,7 @@ export function WatchlistForm({
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       if (activeDropdown === userId && selectedSuggestionIndex >= 0) {
-        const filtered = getFilteredSuggestions(input.username);
+        const filtered = getFilteredSuggestions(input.username, userId);
         setSelectedSuggestionIndex(prev => 
           prev > 0 ? prev - 1 : filtered.length - 1
         );
@@ -469,8 +491,11 @@ export function WatchlistForm({
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
-    // Check for duplicates before submitting
-    const usernames = userInputs.map(u => u.username.trim().toLowerCase()).filter(u => u);
+    // Get only validated users (ignore empty fields)
+    const validUsers = userInputs.filter(u => u.validation.isValid === true);
+    
+    // Check for duplicates among validated users
+    const usernames = validUsers.map(u => u.username.trim().toLowerCase());
     const uniqueUsernames = new Set(usernames);
     if (usernames.length !== uniqueUsernames.size) {
       // There are duplicates, validate all fields to show errors
@@ -482,8 +507,22 @@ export function WatchlistForm({
       return;
     }
     
-    const validUsers = userInputs.filter(u => u.validation.isValid === true);
+    // If we have at least 2 validated users, proceed (ignore empty fields)
     if (validUsers.length >= 2) {
+      // Remove empty/invalid fields from the form (close them)
+      setUserInputs(prev => {
+        const filtered = prev.filter(u => u.validation.isValid === true);
+        // Ensure we have at least 2 fields for next time
+        while (filtered.length < 2) {
+          filtered.push({
+            id: `user-${filtered.length}`,
+            username: '',
+            validation: { isValidating: false, isValid: null, profile: null, error: null, lastValidatedValue: null },
+          });
+        }
+        return filtered;
+      });
+      
       validUsers.forEach(u => saveUsername(u.username.trim()));
       setSuggestions(getStoredUsernames());
       onSubmit(validUsers.map(u => u.username.trim()));
@@ -501,7 +540,7 @@ export function WatchlistForm({
         return (
         <div 
           key={input.id} 
-          className="form-group"
+          className={`form-group ${activeDropdown === input.id ? 'has-active-dropdown' : ''}`}
           style={{ '--circle-color': circleColor } as React.CSSProperties}
         >
           <label htmlFor={input.id}>
@@ -526,7 +565,7 @@ export function WatchlistForm({
               </span>
             ) : (
               <>
-                {index === 0 ? 'First Username' : index === 1 ? 'Second Username' : `Username ${index + 1}`}
+                {`${getOrdinalName(index)} Username`}
                 {input.validation.isValid === true && !input.validation.isValidating && (
                   <span className="label-icon valid-icon">
                     <FaCheck />
@@ -542,7 +581,9 @@ export function WatchlistForm({
               value={input.username}
               onChange={(e) => handleUsernameChange(e.target.value, input.id)}
               onFocus={() => {
-                const filtered = getFilteredSuggestions(input.username);
+                // Close Find Friends dropdown when username input is focused
+                setOpenFollowingDropdown(null);
+                const filtered = getFilteredSuggestions(input.username, input.id);
                 if (filtered.length > 0) {
                   setActiveDropdown(input.id);
                 }
@@ -563,13 +604,13 @@ export function WatchlistForm({
               className={input.validation.isValid === true ? 'valid' : input.validation.isValid === false ? 'invalid' : ''}
             />
             {/* Custom dropdown arrow - only show if there are matching suggestions and no validation icons */}
-            {getFilteredSuggestions(input.username).length > 0 && 
+            {getFilteredSuggestions(input.username, input.id).length > 0 && 
              !input.validation.isValidating && 
              input.validation.isValid === null && (
               <span className="dropdown-arrow-icon">▼</span>
             )}
             {/* Custom suggestions dropdown */}
-            {activeDropdown === input.id && getFilteredSuggestions(input.username).length > 0 && (
+            {activeDropdown === input.id && getFilteredSuggestions(input.username, input.id).length > 0 && (
               <div 
                 className="suggestions-dropdown"
                 ref={(el) => {
@@ -581,7 +622,7 @@ export function WatchlistForm({
                 }}
               >
                 <ul>
-                  {getFilteredSuggestions(input.username).map((suggestion, index) => (
+                  {getFilteredSuggestions(input.username, input.id).map((suggestion, index) => (
                     <li
                       key={suggestion}
                       className={index === selectedSuggestionIndex ? 'selected' : ''}
@@ -601,11 +642,6 @@ export function WatchlistForm({
             {input.validation.isValidating && (
               <span className="input-icon validating">
                 <span className="spinner"></span>
-              </span>
-            )}
-            {input.validation.isValid === false && !input.validation.isValidating && (
-              <span className="input-icon invalid-icon">
-                <FaTimes />
               </span>
             )}
           </div>
@@ -630,6 +666,18 @@ export function WatchlistForm({
               profile={input.validation.profile}
               onSelectUser={(user) => handleSelectFollowingUser(user, input.id)}
               disabled={isLoading}
+              userId={input.id}
+              isOpen={openFollowingDropdown === input.id}
+              onToggle={(isOpen) => {
+                if (isOpen) {
+                  setOpenFollowingDropdown(input.id);
+                  // Close username autocomplete dropdowns when Find Friends opens
+                  setActiveDropdown(null);
+                  setSelectedSuggestionIndex(-1);
+                } else {
+                  setOpenFollowingDropdown(null);
+                }
+              }}
             />
           )}
         </div>

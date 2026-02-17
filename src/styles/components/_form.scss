@@ -4,20 +4,30 @@
 
 .watchlist-form {
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   
     .form-group {
       position: relative;
       margin-bottom: $spacing-md;
+      width: 100%;
+      max-width: 600px; // Match container max-width
       padding-left: 0; // No longer need space for left circles
       padding-right: 40px; // Always reserve space for remove button (even when hidden)
+      
+      // When dropdown is active, ensure it appears above other form groups
+      &.has-active-dropdown {
+        z-index: 100;
+      }
       
       .remove-user-button {
         position: absolute;
         right: 0;
-        // Position relative to input-wrapper: label height + margin + half input height
-        // Label: ~1.44rem (0.9rem * 1.6 line-height) + 0.5rem margin = ~1.94rem
-        // Input center: 1.94rem + (44px / 2) = 1.94rem + 1.375rem = ~3.3rem
-        top: calc(1.44rem + 0.5rem + 22px); // Align with center of input (44px / 2 = 22px)
+        // Center vertically on input: label height + label margin + input center
+        // Label: 0.9rem font-size * 1.5 line-height = 1.35rem, margin-bottom: 0.5rem
+        // Input center: 1.35rem + 0.5rem + (44px / 2) = 1.35rem + 0.5rem + 22px
+        top: calc(1.35rem + 0.5rem + 22px);
         transform: translateY(-50%);
         width: 32px;
         height: 32px;
@@ -90,7 +100,7 @@
     
     .input-wrapper {
       position: relative;
-      z-index: 1; // Ensure input is above circle
+      // Removed z-index to avoid creating stacking context that limits dropdown
       
       input {
         width: 100%;
@@ -101,7 +111,7 @@
         border-radius: $border-radius;
         color: $text-primary;
         font-size: 1rem;
-        min-height: 44px; // Ensure consistent height
+        height: 44px; // Fixed height for consistent alignment
         box-sizing: border-box;
         transition: border-color 0.2s ease, box-shadow 0.2s ease;
         
@@ -195,7 +205,7 @@
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: $border-radius;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-        z-index: 1000;
+        z-index: 3000; // Above all other elements including Find Friends dropdown
         max-height: 200px;
         overflow-y: auto;
         animation: slideDown 0.2s ease-out;
@@ -248,9 +258,11 @@
   .add-user-button-wrapper {
     position: relative;
     margin-bottom: $spacing-md;
+    width: 100%;
+    max-width: 600px; // Match container max-width
     padding-left: 0; // No longer need space for left circles
-    padding-right: 40px; // Match form-group spacing (reserve space for consistency)
-    padding-top: 26.031px; // 23.031px + 13px - 10px
+    padding-right: 0;
+    padding-top: 0;
   }
   
   .add-user-button {
@@ -280,9 +292,11 @@
   .match-button {
     @include button-base;
     width: 100%;
+    max-width: 600px; // Match container max-width
     background-color: #ee7000;
     color: white;
-    margin-top: $spacing-md;
+    margin-top: 0;
+    box-sizing: border-box;
     
     &:not(:disabled):hover {
       background-color: color.adjust(#ee7000, $lightness: 5%);

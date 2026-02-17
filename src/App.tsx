@@ -13,7 +13,9 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [usernames, setUsernames] = useState<string[]>([]);
   const [profiles, setProfiles] = useState<(UserProfile | null)[]>([]);
+  const [currentScrapingUsername, setCurrentScrapingUsername] = useState<string | undefined>(undefined);
   const [followingFeatureEnabled, setFollowingFeatureEnabled] = useState<boolean | null>(null); // null = testing, true/false = result
+  const [formKey, setFormKey] = useState(0); // Key to force form remount on reset
 
   const handleSubmit = async (usernamesArray: string[]) => {
     setIsLoading(true);
@@ -32,6 +34,7 @@ function App() {
       
       for (let i = 0; i < usernamesArray.length; i++) {
         const username = usernamesArray[i];
+        setCurrentScrapingUsername(username);
         
         // Add delay between requests (except for the first one)
         if (i > 0) {
@@ -50,7 +53,10 @@ function App() {
         } catch (err) {
           // If one user fails, continue with others but log the error
           const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+          const errorDetails = err instanceof Error ? err.stack : String(err);
           console.error(`[${new Date().toISOString()}] [ERROR] Failed to fetch data for ${username}:`, errorMessage);
+          console.error(`[${new Date().toISOString()}] [ERROR] Full error details for ${username}:`, errorDetails);
+          console.error(`[${new Date().toISOString()}] [ERROR] Error object for ${username}:`, err);
           failedUsers.push(username);
           
           // Add empty data for this user so we can still process others
@@ -84,6 +90,7 @@ function App() {
       console.error(`[${new Date().toISOString()}] [ERROR] Comparison failed:`, err);
     } finally {
       setIsLoading(false);
+      setCurrentScrapingUsername(undefined);
     }
   };
 
@@ -91,6 +98,8 @@ function App() {
     setResult(null);
     setError(null);
     // Keep usernames and profiles so they're preserved in the form
+    // Increment formKey to ensure form updates with preserved validation state
+    setFormKey(prev => prev + 1);
   };
 
   // Test if following scraper works on app load
@@ -159,10 +168,11 @@ function App() {
           </div>
         )}
 
-        {isLoading && <LoadingSpinner />}
+        {isLoading && <LoadingSpinner currentUsername={currentScrapingUsername} />}
 
         {!isLoading && !result && !error && (
           <WatchlistForm 
+            key={`form-${formKey}-${usernames.join('-')}`}
             onSubmit={handleSubmit} 
             isLoading={isLoading}
             initialUsernames={usernames}
