@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, FormEvent, KeyboardEvent } from 'react';
-import { FaCheck, FaTimes, FaPlus, FaTimesCircle } from 'react-icons/fa';
+import { FaCheck, FaTimes, FaPlus } from 'react-icons/fa';
 import { fetchUserProfile } from '../services/letterboxdService';
 import { UserProfile, FollowingUser } from '../types';
 import { FollowingDropdown } from './FollowingDropdown';
@@ -140,7 +140,7 @@ export function WatchlistForm({
     }
   }, [activeDropdown]);
 
-  const validateUsername = async (username: string, userId: string, skipIfAlreadyValidated: boolean = false) => {
+  const validateUsername = async (username: string, userId: string, skipIfAlreadyValidated: boolean = false, showErrors: boolean = true) => {
     const trimmed = username.trim();
     const input = userInputs.find(u => u.id === userId);
     
@@ -166,11 +166,20 @@ export function WatchlistForm({
     // Check for duplicates first
     const duplicateError = checkForDuplicates(trimmed, userId);
     if (duplicateError) {
-      setUserInputs(prev => prev.map(input => 
-        input.id === userId 
-          ? { ...input, validation: { isValidating: false, isValid: false, profile: null, error: duplicateError, lastValidatedValue: null } }
-          : input
-      ));
+      if (showErrors) {
+        setUserInputs(prev => prev.map(input => 
+          input.id === userId 
+            ? { ...input, validation: { isValidating: false, isValid: false, profile: null, error: duplicateError, lastValidatedValue: null } }
+            : input
+        ));
+      } else {
+        // Silent validation failure - don't set invalid state
+        setUserInputs(prev => prev.map(input => 
+          input.id === userId 
+            ? { ...input, validation: { isValidating: false, isValid: null, profile: null, error: null, lastValidatedValue: null } }
+            : input
+        ));
+      }
       return;
     }
 
@@ -189,11 +198,21 @@ export function WatchlistForm({
           : input
       ));
     } catch (error) {
-      setUserInputs(prev => prev.map(input => 
-        input.id === userId 
-          ? { ...input, validation: { isValidating: false, isValid: false, profile: null, error: "Couldn't find a public user with this username", lastValidatedValue: trimmed } }
-          : input
-      ));
+      // Only set invalid state and error if showErrors is true
+      if (showErrors) {
+        setUserInputs(prev => prev.map(input => 
+          input.id === userId 
+            ? { ...input, validation: { isValidating: false, isValid: false, profile: null, error: "Couldn't find a public user with this username", lastValidatedValue: trimmed } }
+            : input
+        ));
+      } else {
+        // Silent validation failure - don't set invalid state, just clear validating
+        setUserInputs(prev => prev.map(input => 
+          input.id === userId 
+            ? { ...input, validation: { isValidating: false, isValid: null, profile: null, error: null, lastValidatedValue: null } }
+            : input
+        ));
+      }
     }
   };
 
@@ -209,7 +228,7 @@ export function WatchlistForm({
           clearTimeout(timer);
           debounceTimers.current.delete(userId);
         }
-        validateUsername(trimmed, userId, false);
+        validateUsername(trimmed, userId, false, true); // showErrors: true for user-triggered
       }
     }
   };
@@ -236,7 +255,7 @@ export function WatchlistForm({
           setSelectedSuggestionIndex(-1);
         }
       } else {
-        validateUsername(input.username, userId);
+        validateUsername(input.username, userId, false, true); // showErrors: true for user-triggered
       }
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -366,7 +385,7 @@ export function WatchlistForm({
     // Set up debounced validation (0.5 seconds after user stops typing)
     if (trimmedValue) {
       const timer = setTimeout(() => {
-        validateUsername(trimmedValue, userId, true);
+        validateUsername(trimmedValue, userId, true, false); // showErrors: false for automatic debounced validation
         debounceTimers.current.delete(userId);
       }, 500); // 0.5 seconds debounce
       
@@ -457,7 +476,7 @@ export function WatchlistForm({
       // There are duplicates, validate all fields to show errors
       userInputs.forEach(input => {
         if (input.username.trim()) {
-          validateUsername(input.username, input.id);
+          validateUsername(input.username, input.id, false, true); // showErrors: true for form submit
         }
       });
       return;
@@ -485,7 +504,6 @@ export function WatchlistForm({
           className="form-group"
           style={{ '--circle-color': circleColor } as React.CSSProperties}
         >
-          <div className="form-circle" style={{ backgroundColor: circleColor }}></div>
           <label htmlFor={input.id}>
             {input.validation.isValid && input.validation.profile ? (
               <span className="label-with-avatar">
@@ -591,17 +609,16 @@ export function WatchlistForm({
               </span>
             )}
           </div>
-          {userInputs.length > 2 && (
-            <button
-              type="button"
-              className="remove-user-button"
-              onClick={() => removeUser(input.id)}
-              disabled={isLoading}
-              aria-label="Remove user"
-            >
-              <FaTimesCircle />
-            </button>
-          )}
+          <button
+            type="button"
+            className="remove-user-button"
+            onClick={() => removeUser(input.id)}
+            disabled={isLoading || userInputs.length <= 2}
+            aria-label="Remove user"
+            style={{ backgroundColor: circleColor }}
+          >
+            {userInputs.length > 2 && <FaTimes className="remove-x-icon" />}
+          </button>
           {input.validation.error && (
             <div className="error-message" role="alert">
               {input.validation.error}
@@ -622,18 +639,7 @@ export function WatchlistForm({
       {userInputs.length < MAX_USERS && (
         <div 
           className="add-user-button-wrapper"
-          style={{
-            '--circle-color': userInputs.length % 3 === 0 ? '#FF8000' : 
-                              userInputs.length % 3 === 1 ? '#00E054' : '#40BCF4'
-          } as React.CSSProperties}
         >
-          <div 
-            className="form-circle" 
-            style={{ 
-              backgroundColor: userInputs.length % 3 === 0 ? '#FF8000' : 
-                              userInputs.length % 3 === 1 ? '#00E054' : '#40BCF4'
-            }}
-          ></div>
           <button
             type="button"
             className="add-user-button"

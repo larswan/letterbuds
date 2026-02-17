@@ -8,21 +8,8 @@
     .form-group {
       position: relative;
       margin-bottom: $spacing-md;
-      padding-left: 60px; // Make room for larger decorative circle
+      padding-left: 0; // No longer need space for left circles
       padding-right: 40px; // Always reserve space for remove button (even when hidden)
-      
-      .form-circle {
-        position: absolute;
-        left: 0;
-        // Center on input: label height (~1.44rem) + label margin (0.5rem) + half input height (22px)
-        top: calc(1.44rem + 0.5rem + 22px);
-        transform: translateY(-50%);
-        width: 48px;
-        height: 48px;
-        border-radius: 50%;
-        z-index: 0;
-        pointer-events: none;
-      }
       
       .remove-user-button {
         position: absolute;
@@ -32,26 +19,31 @@
         // Input center: 1.94rem + (44px / 2) = 1.94rem + 1.375rem = ~3.3rem
         top: calc(1.44rem + 0.5rem + 22px); // Align with center of input (44px / 2 = 22px)
         transform: translateY(-50%);
-        background: none;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
         border: none;
-        color: #f87171; // red-400
         cursor: pointer;
-        padding: $spacing-xs;
+        padding: 0;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 18px;
-        transition: color 0.2s ease, transform 0.2s ease;
+        transition: transform 0.2s ease;
         z-index: 10;
+        opacity: 1; // Always full opacity
+        
+        .remove-x-icon {
+          color: white;
+          font-size: 16px;
+        }
         
         &:hover:not(:disabled) {
-          color: #ef4444; // red-500 (darker red on hover)
           transform: translateY(-50%) scale(1.1);
         }
         
         &:disabled {
-          opacity: 0.5;
           cursor: not-allowed;
+          opacity: 1; // Keep full opacity even when disabled
         }
       }
     
@@ -233,10 +225,20 @@
     }
     
     .error-message {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      width: fit-content;
+      max-width: 100%;
       margin-top: $spacing-xs;
       color: #f87171; // red-400
       font-size: 0.875rem;
-      animation: slideDown 0.3s ease-out;
+      animation: fadeInUpOut 3.3s ease-out forwards;
+      z-index: 1001; // Above dropdowns and other elements
+      background-color: $bg-secondary;
+      padding: $spacing-xs $spacing-sm;
+      border-radius: $border-radius;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
       display: flex;
       align-items: center;
       gap: $spacing-xs;
@@ -246,22 +248,9 @@
   .add-user-button-wrapper {
     position: relative;
     margin-bottom: $spacing-md;
-    padding-left: 60px; // Match form-group spacing for larger circle
+    padding-left: 0; // No longer need space for left circles
     padding-right: 40px; // Match form-group spacing (reserve space for consistency)
     padding-top: 26.031px; // 23.031px + 13px - 10px
-    
-    .form-circle {
-      position: absolute;
-      left: 0;
-      // Center on button: padding-top + half button height (44px / 2 = 22px)
-      top: calc(26.031px + 22px);
-      transform: translateY(-41%);
-      width: 48px;
-      height: 48px;
-      border-radius: 50%;
-      z-index: 0;
-      pointer-events: none;
-    }
   }
   
   .add-user-button {
@@ -358,6 +347,36 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInUpOut {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  10% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  90% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-8px);
   }
 }
 
