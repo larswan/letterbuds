@@ -41,32 +41,34 @@ export function MatchResults({ result, usernames, profiles, onReset }: MatchResu
         </button>
       </div>
 
-      <div className="results-summary">
-        {usernames.map((username) => {
-          const profile = profileMap.get(username);
-          const count = userWatchlistCounts[username] || 0;
-          return (
-            <div key={username} className="user-summary">
-              {profile?.avatarUrl && (
-                <img 
-                  src={profile.avatarUrl} 
-                  alt={username}
-                  className="user-avatar"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-              )}
-              <div className="user-summary-content">
-                <strong>{username}</strong>
-                <div className="user-count">
-                  <span className="number">{count}</span>
-                  <span className="count-label">films in watchlist</span>
+      <div className="results-summary-wrap">
+        <div className="results-summary">
+          {usernames.map((username) => {
+            const profile = profileMap.get(username);
+            const count = userWatchlistCounts[username] || 0;
+            return (
+              <div key={username} className="user-summary">
+                {profile?.avatarUrl && (
+                  <img 
+                    src={profile.avatarUrl} 
+                    alt={username}
+                    className="user-avatar"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                )}
+                <div className="user-summary-content">
+                  <strong>{username}</strong>
+                  <div className="user-count">
+                    <span className="number">{count}</span>
+                    <span className="count-label">films in watchlist</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
 
       {userGroups.length === 0 ? (
@@ -99,8 +101,8 @@ export function MatchResults({ result, usernames, profiles, onReset }: MatchResu
                       <div className="group-heading">
                         <span className="number">{group.filmCount}</span>
                         <span className="count-label">{group.filmCount === 1 ? 'film' : 'films'} in common</span>
+                        <h4 className="group-subheading">{userNames}</h4>
                       </div>
-                      <h4 className="group-subheading">{userNames}</h4>
                       <div className="films-list">
                         {group.commonFilms.map((film, index) => (
                           <FilmCard key={index} film={film} />

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { WatchlistForm } from './components/WatchlistForm';
 import { MatchResults } from './components/MatchResults';
 import { LoadingSpinner } from './components/LoadingSpinner';
+import { StyleTestPage } from './components/StyleTestPage';
 import { fetchWatchlist, fetchUserProfile } from './services/letterboxdService';
 import { findCommonFilmsMultiUser } from './services/matchService';
 import { enrichFilms, enrichFilmPosterFromTMDB } from './services/filmEnrichmentService';
@@ -277,6 +278,10 @@ function App() {
     setFollowingFeatureEnabled(null);
   }, []);
 
+  if (window.location.pathname === '/style-test') {
+    return <StyleTestPage />;
+  }
+
   return (
     <div className="app">
       <header className="app-header">
@@ -287,6 +292,7 @@ function App() {
             className="letterboxd-logo"
           />
           <h1>Letterbuds</h1>
+          <a href="/style-test" className="header-style-test-link">Style test</a>
         </div>
       </header>
 

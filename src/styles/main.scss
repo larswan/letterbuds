@@ -62,6 +62,16 @@ body {
           font-size: 1.75rem;
         }
       }
+
+      .header-style-test-link {
+        margin-left: auto;
+        font-size: 0.875rem;
+        color: $text-muted;
+        text-decoration: none;
+        &:hover {
+          color: $text-secondary;
+        }
+      }
     }
   }
   

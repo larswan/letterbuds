@@ -30,11 +30,18 @@
     }
   }
   
-  .results-summary {
-    background-color: $bg-secondary;
-    padding: $spacing-md;
+  .results-summary-wrap {
+    padding: 3px;
     border-radius: $border-radius;
     margin-bottom: $spacing-lg;
+    background: linear-gradient(90deg, rgba(255, 128, 0, 1) 15%, rgba(0, 224, 84, 1) 50%, rgba(64, 188, 244, 1) 85%);
+  }
+
+  .results-summary {
+    margin: 0;
+    padding: $spacing-md;
+    border-radius: calc(#{$border-radius} - 3px);
+    background-color: $bg-secondary;
     
     p {
       margin: $spacing-xs 0;
@@ -142,47 +149,67 @@
   }
   
   .user-group {
-    background-color: $bg-secondary;
-    padding: $spacing-md;
     border-radius: $border-radius;
-    
+    overflow: hidden;
+    background-color: $bg-secondary;
+
     &.user-group-empty {
       opacity: 0.7;
+      padding: $spacing-md;
     }
-    
+
     .group-heading {
+      padding: $spacing-md;
+      background: #FF8000;
+      background:
+        linear-gradient(to bottom, transparent 0%, transparent 91%, $bg-secondary 100%),
+        linear-gradient(90deg, rgba(255, 128, 0, 1) 15%, rgba(0, 224, 84, 1) 50%, rgba(64, 188, 244, 1) 85%);
+      border-radius: $border-radius $border-radius 0 0;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 0.25rem;
-      margin: 0 0 $spacing-md 0;
-      
+      gap: 0;
+
       .number {
         line-height: 1;
+        font-size: 2rem;
+        font-family: $font-stack-tiempos-text;
+        font-weight: 800;
+        font-variant-numeric: lining-nums;
+        color: #fff;
       }
-      
+
       .count-label {
-        color: $text-secondary;
+        color: #fff;
         font-size: 0.9rem;
       }
+
+      .group-subheading {
+        margin: 0.25rem 0 0 0;
+        color: #fff;
+        font-size: 1rem;
+        font-weight: 500;
+        text-align: center;
+      }
     }
-    
+
     .group-subheading {
       margin: 0 0 $spacing-md 0;
       color: $text-secondary;
       font-size: 1rem;
       font-weight: 500;
+      text-align: center;
     }
-    
+
     .no-films-message {
       margin: 0;
       color: $text-muted;
       font-size: 0.9rem;
       font-style: italic;
     }
-    
+
     .films-list {
-      margin-top: $spacing-md;
+      padding: $spacing-md;
     }
   }
 }

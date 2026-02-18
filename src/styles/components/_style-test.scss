@@ -1,0 +1,201 @@
+// Duplicated styles for the user-group section (style test page).
+// Change these to try layout/visual tweaks without affecting the real results.
+// Scoped under .style-test-page; classes prefixed with style-test-.
+
+@use '../variables' as *;
+@use '../mixins' as *;
+
+.style-test-page {
+  padding: $spacing-lg;
+  max-width: 950px;
+  margin: 0 auto;
+}
+
+.style-test-header {
+  margin-bottom: $spacing-xl;
+
+  h1 {
+    font-size: 1.5rem;
+    margin: 0 0 $spacing-sm 0;
+    color: $text-primary;
+  }
+
+  p {
+    color: $text-secondary;
+    margin: 0 0 $spacing-sm 0;
+    font-size: 0.95rem;
+  }
+
+  code {
+    background: $bg-secondary;
+    padding: 0.2em 0.4em;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+
+  .style-test-back {
+    display: inline-block;
+    margin-top: $spacing-sm;
+    color: $accent-primary;
+    text-decoration: none;
+    font-weight: 500;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+.style-test-user-group-section {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-lg;
+}
+
+.style-test-user-group {
+  position: relative;
+  border-radius: $border-radius;
+  overflow: hidden;
+  background-color: $bg-secondary;
+
+  // Fade bottom of container into page background
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 120px;
+    background: linear-gradient(to bottom, transparent, $bg-primary);
+    pointer-events: none;
+  }
+
+  // Heading bar: horizontal gradient, bottom fades into films container (#2a2a2a)
+  .style-test-group-heading {
+    padding: $spacing-md;
+    background: #FF8000;
+    background:
+      linear-gradient(to bottom, transparent 0%, transparent 91%, #2a2a2a 100%),
+      linear-gradient(90deg, rgba(255, 128, 0, 1) 15%, rgba(0, 224, 84, 1) 50%, rgba(64, 188, 244, 1) 85%);
+    border-radius: $border-radius $border-radius 0 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+
+    .style-test-number,
+    .style-test-count-label,
+    .style-test-group-subheading {
+      color: #fff;
+    }
+
+    .style-test-number {
+      line-height: 1;
+      font-size: 2rem;
+      font-family: $font-stack-tiempos-text;
+      font-weight: 800;
+      font-variant-numeric: lining-nums;
+    }
+
+    .style-test-count-label {
+      font-size: 0.9rem;
+    }
+
+    .style-test-group-subheading {
+      margin: 0.25rem 0 0 0;
+      font-size: 1rem;
+      font-weight: 500;
+      text-align: center;
+    }
+  }
+
+  .style-test-films-list {
+    padding: $spacing-md;
+    display: grid;
+    gap: $spacing-md;
+
+    @include tablet {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+}
+
+.style-test-film-card-link {
+  text-decoration: none;
+  display: block;
+  color: inherit;
+
+  &:hover .style-test-film-card {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+  }
+}
+
+.style-test-film-card {
+  background-color: $bg-secondary;
+  border-radius: $border-radius;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+
+  .style-test-film-poster-container {
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    overflow: hidden;
+    background-color: rgba(0, 0, 0, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .style-test-film-poster {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .style-test-film-poster-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(255, 255, 255, 0.05);
+    color: $text-muted;
+    font-size: 0.8rem;
+    text-align: center;
+    padding: $spacing-sm;
+
+    span {
+      opacity: 0.6;
+    }
+  }
+
+  .style-test-film-info {
+    padding: $spacing-sm;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+
+    .style-test-film-title {
+      margin: 0 0 $spacing-xs 0;
+      color: $text-primary;
+      font-size: 1rem;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    .style-test-film-year {
+      margin: 0;
+      color: $text-muted;
+      font-size: 0.9rem;
+    }
+  }
+}
