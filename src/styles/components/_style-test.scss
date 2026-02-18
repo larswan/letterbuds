@@ -33,6 +33,39 @@
     font-size: 0.9em;
   }
 
+  .style-test-ab-toggle {
+    display: flex;
+    align-items: center;
+    gap: $spacing-sm;
+    margin: $spacing-sm 0;
+
+    .style-test-ab-label {
+      color: $text-secondary;
+      font-size: 0.9rem;
+    }
+
+    .style-test-ab-btn {
+      padding: 0.35rem 0.75rem;
+      font-size: 0.875rem;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: $bg-secondary;
+      color: $text-secondary;
+      cursor: pointer;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: $text-primary;
+      }
+
+      &.active {
+        border-color: $accent-primary;
+        color: $accent-primary;
+        background: rgba($accent-primary, 0.1);
+      }
+    }
+  }
+
   .style-test-back {
     display: inline-block;
     margin-top: $spacing-sm;
@@ -56,27 +89,11 @@
   position: relative;
   border-radius: $border-radius;
   overflow: hidden;
-  background-color: $bg-secondary;
+  background: linear-gradient(90deg, rgba(255, 128, 0, 1) 15%, rgba(0, 224, 84, 1) 50%, rgba(64, 188, 244, 1) 85%);
 
-  // Fade bottom of container into page background
-  &::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 120px;
-    background: linear-gradient(to bottom, transparent, $bg-primary);
-    pointer-events: none;
-  }
-
-  // Heading bar: horizontal gradient, bottom fades into films container (#2a2a2a)
+  // Heading: no own background so gradient from parent shows through
   .style-test-group-heading {
     padding: $spacing-md;
-    background: #FF8000;
-    background:
-      linear-gradient(to bottom, transparent 0%, transparent 91%, #2a2a2a 100%),
-      linear-gradient(90deg, rgba(255, 128, 0, 1) 15%, rgba(0, 224, 84, 1) 50%, rgba(64, 188, 244, 1) 85%);
     border-radius: $border-radius $border-radius 0 0;
     display: flex;
     flex-direction: column;
@@ -109,14 +126,31 @@
     }
   }
 
+  .style-test-films-list-fade {
+    height: 8px;
+    margin: 0 3px;
+    background: linear-gradient(to bottom, transparent 0%, #2a2a2a 100%);
+    flex-shrink: 0;
+  }
+
   .style-test-films-list {
+    margin: 3px;
+    margin-top: 0;
     padding: $spacing-md;
+    background: #2a2a2a;
+    border-radius: 0 0 8px 8px;
     display: grid;
     gap: $spacing-md;
 
     @include tablet {
       grid-template-columns: repeat(2, 1fr);
     }
+  }
+
+  // B: No fade, full border radius on films list
+  &.style-test-user-group--no-fade .style-test-films-list {
+    margin-top: 3px;
+    border-radius: 8px;
   }
 }
 

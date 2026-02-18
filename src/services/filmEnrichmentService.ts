@@ -51,6 +51,19 @@ interface TMDBFindResponse {
   }>;
 }
 
+/** Details for the film modal (from TMDB movie + credits + videos) */
+export interface TMDBFilmDetails {
+  backdropUrl: string | null;
+  posterUrl: string | null;
+  overview: string | null;
+  genres: string[];
+  voteAverage: number | null;
+  releaseDate: string | null;
+  runtime: number | null;
+  director: string | null;
+  trailerUrl: string | null;
+}
+
 /**
  * Enrich film data using OMDb API
  */
@@ -206,6 +219,64 @@ export async function enrichFilmPosterFromTMDB(film: Film): Promise<Film | null>
     };
   } catch (error) {
     console.error(`[ENRICH] Error enriching poster for ${film.title}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Fetch full film details from TMDB for the modal (movie details + credits + videos).
+ * Uses tmdbId if present, otherwise tries find by imdb_id.
+ */
+export async function getFilmDetailsFromTMDB(film: Film): Promise<TMDBFilmDetails | null> {
+  const TMDB_BASE = 'https://api.themoviedb.org/3';
+  if (!TMDB_API_KEY) return null;
+
+  let tmdbId = film.tmdbId;
+  if (!tmdbId && film.imdbId) {
+    try {
+      const findRes = await fetch(
+        `${TMDB_BASE}/find/${film.imdbId}?api_key=${TMDB_API_KEY}&external_source=imdb_id`
+      );
+      if (!findRes.ok) return null;
+      const findData: TMDBFindResponse = await findRes.json();
+      tmdbId = findData.movie_results?.[0]?.id;
+    } catch {
+      return null;
+    }
+  }
+  if (!tmdbId) return null;
+
+  try {
+    const [movieRes, creditsRes, videosRes] = await Promise.all([
+      fetch(`${TMDB_BASE}/movie/${tmdbId}?api_key=${TMDB_API_KEY}`),
+      fetch(`${TMDB_BASE}/movie/${tmdbId}/credits?api_key=${TMDB_API_KEY}`),
+      fetch(`${TMDB_BASE}/movie/${tmdbId}/videos?api_key=${TMDB_API_KEY}`),
+    ]);
+
+    const movie = movieRes.ok ? await movieRes.json() : null;
+    const credits = creditsRes.ok ? await creditsRes.json() : null;
+    const videos = videosRes.ok ? await videosRes.json() : null;
+
+    const director = credits?.crew?.find((c: { job: string }) => c.job === 'Director')?.name ?? null;
+    const trailer = videos?.results?.find((v: { site: string; type: string }) => v.site === 'YouTube' && v.type === 'Trailer');
+    const trailerUrl = trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : null;
+
+    const backdropPath = movie?.backdrop_path;
+    const posterPath = movie?.poster_path;
+
+    return {
+      backdropUrl: backdropPath ? `https://image.tmdb.org/t/p/w780${backdropPath}` : null,
+      posterUrl: posterPath ? `https://image.tmdb.org/t/p/w342${posterPath}` : null,
+      overview: movie?.overview ?? null,
+      genres: (movie?.genres ?? []).map((g: { name: string }) => g.name),
+      voteAverage: movie?.vote_average ?? null,
+      releaseDate: movie?.release_date ?? null,
+      runtime: movie?.runtime ?? null,
+      director,
+      trailerUrl,
+    };
+  } catch (error) {
+    console.warn(`[ENRICH] Error fetching TMDB details for ${film.title}:`, error);
     return null;
   }
 }

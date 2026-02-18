@@ -3,6 +3,7 @@
  * Real data from a recent fetch (nancopeland + larswan, 17 films).
  * Visit /style-test to view. Styles are in _style-test.scss (duplicated so changes don't affect main results).
  */
+import { useState } from 'react';
 import '../styles/components/_style-test.scss';
 
 // Real data from fetch: nancopeland + larswan, 17 films in common
@@ -31,21 +32,41 @@ const MOCK_GROUP = {
 };
 
 export function StyleTestPage() {
+  const [useFade, setUseFade] = useState(true);
+
   return (
     <div className="style-test-page">
       <div className="style-test-header">
         <h1>User group style test</h1>
         <p>Mock data from a recent fetch. Edit <code>_style-test.scss</code> to try layout/visual changes.</p>
+        <div className="style-test-ab-toggle">
+          <span className="style-test-ab-label">Layout:</span>
+          <button
+            type="button"
+            className={useFade ? 'style-test-ab-btn active' : 'style-test-ab-btn'}
+            onClick={() => setUseFade(true)}
+          >
+            A — Fade
+          </button>
+          <button
+            type="button"
+            className={!useFade ? 'style-test-ab-btn active' : 'style-test-ab-btn'}
+            onClick={() => setUseFade(false)}
+          >
+            B — No fade, full radius
+          </button>
+        </div>
         <a href="/" className="style-test-back">← Back to app</a>
       </div>
 
       <div className="style-test-user-group-section">
-        <div className="style-test-user-group">
+        <div className={`style-test-user-group${useFade ? '' : ' style-test-user-group--no-fade'}`}>
           <div className="style-test-group-heading">
             <span className="style-test-number">{MOCK_GROUP.filmCount}</span>
             <span className="style-test-count-label">films in common</span>
             <h4 className="style-test-group-subheading">{MOCK_GROUP.usernames}</h4>
           </div>
+          {useFade && <div className="style-test-films-list-fade" aria-hidden="true" />}
           <div className="style-test-films-list">
             {MOCK_GROUP.films.map((film, index) => (
               <a key={index} href="#" className="style-test-film-card-link" onClick={(e) => e.preventDefault()}>

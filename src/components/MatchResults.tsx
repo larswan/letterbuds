@@ -1,4 +1,7 @@
+import { useEffect, useState, useCallback } from 'react';
 import { MultiUserMatchResult, Film, UserProfile } from '../types';
+import { getFilmDetailsFromTMDB, TMDBFilmDetails } from '../services/filmEnrichmentService';
+import { FilmModal } from './FilmModal';
 import '../styles/components/_results.scss';
 
 interface MatchResultsProps {
@@ -10,6 +13,26 @@ interface MatchResultsProps {
 
 export function MatchResults({ result, usernames, profiles, onReset }: MatchResultsProps) {
   const { userGroups, userWatchlistCounts } = result;
+  const [selectedFilm, setSelectedFilm] = useState<Film | null>(null);
+  const [modalDetails, setModalDetails] = useState<TMDBFilmDetails | null>(null);
+  const [modalLoading, setModalLoading] = useState(false);
+
+  const handleFilmClick = useCallback((film: Film) => {
+    setSelectedFilm(film);
+    setModalDetails(null);
+    setModalLoading(true);
+    getFilmDetailsFromTMDB(film).then((details) => {
+      setModalDetails(details);
+      setModalLoading(false);
+    }).catch(() => {
+      setModalLoading(false);
+    });
+  }, []);
+
+  const closeModal = useCallback(() => {
+    setSelectedFilm(null);
+    setModalDetails(null);
+  }, []);
 
   // Group results by number of users
   const groupsByUserCount = userGroups.reduce((acc, group) => {
@@ -32,6 +55,17 @@ export function MatchResults({ result, usernames, profiles, onReset }: MatchResu
     profileMap.set(username, profiles[index] || null);
   });
 
+  // Dev only: log full enriched data for the first two movies displayed
+  useEffect(() => {
+    if (import.meta.env.DEV && userGroups.length > 0) {
+      const firstGroupWithFilms = userGroups.find(g => g.commonFilms.length > 0);
+      if (firstGroupWithFilms) {
+        const firstTwo = firstGroupWithFilms.commonFilms.slice(0, 2);
+        console.log('[MatchResults] First two films (full enriched data):', firstTwo);
+      }
+    }
+  }, [userGroups]);
+
   return (
     <div className="match-results">
       <div className="results-header">
@@ -46,24 +80,28 @@ export function MatchResults({ result, usernames, profiles, onReset }: MatchResu
           {usernames.map((username) => {
             const profile = profileMap.get(username);
             const count = userWatchlistCounts[username] || 0;
+            const profileUrl = `https://letterboxd.com/${username}/`;
+            const watchlistUrl = `https://letterboxd.com/${username}/watchlist/`;
             return (
               <div key={username} className="user-summary">
-                {profile?.avatarUrl && (
-                  <img 
-                    src={profile.avatarUrl} 
-                    alt={username}
-                    className="user-avatar"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                )}
                 <div className="user-summary-content">
-                  <strong>{username}</strong>
-                  <div className="user-count">
+                  <a href={profileUrl} target="_blank" rel="noopener noreferrer" className="user-summary-profile-link">
+                    {profile?.avatarUrl && (
+                      <img 
+                        src={profile.avatarUrl} 
+                        alt={username}
+                        className="user-avatar"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    )}
+                    <strong>{username}</strong>
+                  </a>
+                  <a href={watchlistUrl} target="_blank" rel="noopener noreferrer" className="user-count">
                     <span className="number">{count}</span>
                     <span className="count-label">films in watchlist</span>
-                  </div>
+                  </a>
                 </div>
               </div>
             );
@@ -105,7 +143,7 @@ export function MatchResults({ result, usernames, profiles, onReset }: MatchResu
                       </div>
                       <div className="films-list">
                         {group.commonFilms.map((film, index) => (
-                          <FilmCard key={index} film={film} />
+                          <FilmCard key={index} film={film} onFilmClick={handleFilmClick} />
                         ))}
                       </div>
                     </div>
@@ -115,6 +153,15 @@ export function MatchResults({ result, usernames, profiles, onReset }: MatchResu
             );
           })}
         </div>
+      )}
+
+      {selectedFilm && (
+        <FilmModal
+          film={selectedFilm}
+          details={modalDetails}
+          loading={modalLoading}
+          onClose={closeModal}
+        />
       )}
     </div>
   );
@@ -140,7 +187,7 @@ function getPosterUrl(posterUrl?: string): string | null {
   return posterUrl;
 }
 
-function FilmCard({ film }: { film: Film }) {
+function FilmCard({ film, onFilmClick }: { film: Film; onFilmClick?: (film: Film) => void }) {
   const letterboxdUrl = film.cleanTitle 
     ? `https://letterboxd.com${film.cleanTitle}`
     : null;
@@ -180,6 +227,18 @@ function FilmCard({ film }: { film: Film }) {
       </div>
     </div>
   );
+
+  if (onFilmClick) {
+    return (
+      <button
+        type="button"
+        className="film-card-link film-card-button"
+        onClick={() => onFilmClick(film)}
+      >
+        {cardContent}
+      </button>
+    );
+  }
 
   if (letterboxdUrl) {
     return (
