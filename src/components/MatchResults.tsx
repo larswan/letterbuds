@@ -119,20 +119,19 @@ export function MatchResults({ result, usernames, profiles, onReset }: MatchResu
 }
 
 /**
- * Get appropriately sized poster URL for small containers (< 250x300)
- * Uses w185 size for TMDB images, falls back to original URL
+ * Get poster URL at size suitable for display (up to ~240x360).
+ * Uses w342 for TMDB images (sharp at 240px width), falls back to original URL.
  */
 function getPosterUrl(posterUrl?: string): string | null {
   if (!posterUrl) return null;
   
-  // If it's a TMDB URL, replace with w185 size for smaller containers
+  // If it's a TMDB URL, use w342 for good quality at 240px display width
   // TMDB URLs format: https://image.tmdb.org/t/p/{size}{poster_path}
   const tmdbPattern = /(https:\/\/image\.tmdb\.org\/t\/p\/)(w\d+|original)(.+)/;
   const match = posterUrl.match(tmdbPattern);
   
   if (match) {
-    // Replace size with w185 for smaller containers
-    return `${match[1]}w185${match[3]}`;
+    return `${match[1]}w342${match[3]}`;
   }
   
   // Not a TMDB URL, return as-is

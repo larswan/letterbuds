@@ -69,10 +69,15 @@
         align-items: center;
         justify-content: space-between;
         flex: 1;
+        min-width: 0;
         gap: $spacing-sm;
         
         strong {
           color: $text-primary;
+          flex: 1;
+          min-width: 0;
+          word-break: break-word;
+          overflow-wrap: break-word;
         }
         
         .user-count {
@@ -80,6 +85,8 @@
           flex-direction: column;
           align-items: center;
           gap: 0.25rem;
+          flex-shrink: 0;
+          min-width: 110px;
           
           .number {
             line-height: 1;
