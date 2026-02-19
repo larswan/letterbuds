@@ -645,11 +645,21 @@ app.get('/api/profile/:username', async (req, res) => {
       avatarUrl = avatarImg.attr('src') || null;
     }
     
-    console.log(`[${new Date().toISOString()}] [SCRAPE] Successfully scraped profile for ${username}, avatar: ${avatarUrl || 'not found'}`);
+    // Check if user has at least one film in watchlist (profile sidebar shows count only when non-empty)
+    let hasWatchlist = false;
+    const watchlistSection = $('.watchlist-aside');
+    if (watchlistSection.length > 0) {
+      const countLink = watchlistSection.find('a.all-link[href*="watchlist"]').first();
+      const countText = countLink.text().trim();
+      const count = parseInt(countText, 10);
+      hasWatchlist = !isNaN(count) && count >= 1;
+    }
+    console.log(`[${new Date().toISOString()}] [SCRAPE] Successfully scraped profile for ${username}, avatar: ${avatarUrl || 'not found'}, hasWatchlist: ${hasWatchlist}`);
     
     return res.json({
       username,
       avatarUrl,
+      hasWatchlist,
     });
     
   } catch (error) {

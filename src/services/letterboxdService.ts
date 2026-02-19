@@ -220,6 +220,7 @@ export async function fetchUserProfile(username: string, throwOnError: boolean =
     return {
       username: data.username || username,
       avatarUrl: data.avatarUrl || null,
+      hasWatchlist: data.hasWatchlist,
     };
   } catch (error) {
     const timestamp = new Date().toISOString();
@@ -231,6 +232,7 @@ export async function fetchUserProfile(username: string, throwOnError: boolean =
     return {
       username,
       avatarUrl: null,
+      hasWatchlist: undefined,
     };
   }
 }

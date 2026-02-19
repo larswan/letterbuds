@@ -285,6 +285,22 @@ export function WatchlistForm({
 
     try {
       const profile = await fetchUserProfile(trimmed, true);
+      if (profile.hasWatchlist === false) {
+        if (showErrors) {
+          setUserInputs(prev => prev.map(input => 
+            input.id === userId 
+              ? { ...input, validation: { isValidating: false, isValid: false, profile: null, error: `${trimmed}'s watchlist is empty`, lastValidatedValue: trimmed } }
+              : input
+          ));
+        } else {
+          setUserInputs(prev => prev.map(input => 
+            input.id === userId 
+              ? { ...input, validation: { isValidating: false, isValid: null, profile: null, error: null, lastValidatedValue: null } }
+              : input
+          ));
+        }
+        return;
+      }
       setUserInputs(prev => prev.map(input => 
         input.id === userId 
           ? { ...input, validation: { isValidating: false, isValid: true, profile, error: null, lastValidatedValue: trimmed } }

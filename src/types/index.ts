@@ -43,6 +43,7 @@ export interface MultiUserMatchResult {
 export interface UserProfile {
   username: string;
   avatarUrl: string | null;
+  hasWatchlist?: boolean;
 }
 
 export interface FollowingUser {
