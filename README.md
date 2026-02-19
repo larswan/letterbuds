@@ -43,6 +43,7 @@ The Vite dev server will proxy `/api` requests to the Express server running on 
 ### Option 2: Run Local Scraper Service (Recommended - More Reliable)
 
 Running the `letterboxd-list-radarr` service locally gives you:
+
 - ✅ More reliability (no 503 errors from free tier)
 - ✅ Always up-to-date with latest scraper fixes
 - ✅ No shared rate limits
@@ -54,20 +55,24 @@ Running the `letterboxd-list-radarr` service locally gives you:
    - Linux: `sudo apt-get install docker.io docker-compose`
 
 2. **Start the scraper service:**
+
    ```bash
    docker-compose up -d
    ```
+
    This starts:
    - Redis (on port 6379)
    - letterboxd-list-radarr service (on port 5000)
 
 3. **Configure environment:**
+
    ```bash
    cp .env.example .env
    # Edit .env and ensure WATCHLIST_API_BASE=http://localhost:5000
    ```
 
 4. **Start the app (two terminals):**
+
    ```bash
    # Terminal 1: Express proxy server
    npm run dev:server
@@ -77,11 +82,13 @@ Running the `letterboxd-list-radarr` service locally gives you:
    ```
 
 **To stop the scraper service:**
+
 ```bash
 npm run dev:scraper:stop
 ```
 
 **To update the scraper to latest version:**
+
 ```bash
 npm run dev:scraper:stop
 docker-compose pull
@@ -125,6 +132,7 @@ This app can be deployed to Railway (recommended), Render, or other Node.js host
    - Follow DNS instructions to point domain to Railway
 
 **Benefits:**
+
 - ✅ Best free tier ($5 credit/month, usually enough)
 - ✅ More reliable than Render free tier
 - ✅ Supports Docker (can run scraper service)
@@ -151,12 +159,14 @@ This app can be deployed to Railway (recommended), Render, or other Node.js host
 **Note**: Free tier spins down after 15 minutes of inactivity. First request after spin-down may take ~30 seconds.
 
 **After Deployment:**
+
 - Test health endpoint: `https://your-app.onrender.com/health`
 - Set up monitoring (see `.admin/README.md`)
 
 ### Domain Setup
 
 **Recommended: Cloudflare Registrar** (best value)
+
 1. Go to [Cloudflare Registrar](https://www.cloudflare.com/products/registrar/)
 2. Search for your domain (e.g., `letterbuds.com`)
 3. Purchase (~$8-12/year for .com)
@@ -180,6 +190,7 @@ This app can be deployed to Railway (recommended), Render, or other Node.js host
 3. The `Procfile` will automatically run `npm start`
 
 The Express server handles:
+
 - API proxy requests to letterboxd-list-radarr (bypasses CORS)
 - User profile scraping for avatars
 - Serving the React frontend in production
@@ -189,14 +200,15 @@ The app uses the letterboxd-list-radarr API service hosted at `https://letterbox
 ## API Integration
 
 The app fetches watchlists from the letterboxd-list-radarr service:
+
 - Endpoint: `https://letterboxd-list-radarr.onrender.com/{username}/watchlist/`
 - Returns Radarr-compatible JSON format with film data
 
 ## TODO
 
+- [ ] Check if watchlist is empty before validating user
 - [ ] Add pagination support for following/followers lists (currently only shows first page)
 
 ## License
 
 MIT
-

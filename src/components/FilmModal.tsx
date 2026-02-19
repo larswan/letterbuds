@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Film } from '../types';
 import { TMDBFilmDetails } from '../services/filmEnrichmentService';
 import '../styles/components/_film-modal.scss';
@@ -13,6 +13,7 @@ interface FilmModalProps {
 
 export function FilmModal({ film, details, loading, onClose, isClosing = false }: FilmModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
+  const [backdropImageLoaded, setBackdropImageLoaded] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -27,6 +28,11 @@ export function FilmModal({ film, details, loading, onClose, isClosing = false }
     overlayRef.current?.focus({ preventScroll: true });
     return () => prevActive?.focus();
   }, []);
+
+  // Reset backdrop loaded state when film/details change so new backdrop fades in
+  useEffect(() => {
+    setBackdropImageLoaded(false);
+  }, [film, details?.backdropUrl]);
 
   const letterboxdUrl = film.cleanTitle
     ? `https://letterboxd.com${film.cleanTitle}`
@@ -61,7 +67,13 @@ export function FilmModal({ film, details, loading, onClose, isClosing = false }
           <>
             <div className="film-modal-backdrop">
               {details?.backdropUrl ? (
-                <img src={details.backdropUrl} alt="" className="film-modal-backdrop-img" />
+                <img
+                  src={details.backdropUrl}
+                  alt=""
+                  className={`film-modal-backdrop-img${backdropImageLoaded ? ' film-modal-backdrop-img--loaded' : ''}`}
+                  decoding="async"
+                  onLoad={() => setBackdropImageLoaded(true)}
+                />
               ) : (
                 <div className="film-modal-backdrop-placeholder" />
               )}
@@ -104,6 +116,7 @@ export function FilmModal({ film, details, loading, onClose, isClosing = false }
                     rel="noopener noreferrer"
                     className="film-modal-btn film-modal-btn-trailer"
                   >
+                    <img src="/YouTube_play_icon_compressed.png" alt="" className="film-modal-btn-trailer-icon" />
                     Watch trailer
                   </a>
                 )}
