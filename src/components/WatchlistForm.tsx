@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, FormEvent, KeyboardEvent } from 'react';
 import { FaCheck, FaTimes, FaPlus } from 'react-icons/fa';
-import { fetchUserProfile, fetchFollowing } from '../services/letterboxdService';
+import { fetchUserProfile, fetchFollowing, fetchWatchlist } from '../services/letterboxdService';
+import { sessionCache } from '../services/cacheService';
 import { UserProfile, FollowingUser } from '../types';
 import { FollowingDropdown } from './FollowingDropdown';
 import '../styles/components/_form.scss';
@@ -306,6 +307,10 @@ export function WatchlistForm({
           ? { ...input, validation: { isValidating: false, isValid: true, profile, error: null, lastValidatedValue: trimmed } }
           : input
       ));
+      // Preload watchlist in background so loading screen is shorter on submit
+      fetchWatchlist(trimmed).then((films) => {
+        sessionCache.setWatchlist(trimmed, films);
+      }).catch(() => { /* ignore; will fetch again on submit */ });
     } catch (error) {
       // Only set invalid state and error if showErrors is true
       if (showErrors) {

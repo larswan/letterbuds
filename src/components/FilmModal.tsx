@@ -8,9 +8,10 @@ interface FilmModalProps {
   details: TMDBFilmDetails | null;
   loading: boolean;
   onClose: () => void;
+  isClosing?: boolean;
 }
 
-export function FilmModal({ film, details, loading, onClose }: FilmModalProps) {
+export function FilmModal({ film, details, loading, onClose, isClosing = false }: FilmModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -41,14 +42,14 @@ export function FilmModal({ film, details, loading, onClose }: FilmModalProps) {
 
   return (
     <div
-  ref={overlayRef}
-  className="film-modal-overlay"
-  onClick={onClose}
-  role="dialog"
-  aria-modal="true"
-  aria-label="Film details"
-  tabIndex={-1}
->
+      ref={overlayRef}
+      className={`film-modal-overlay${isClosing ? ' film-modal-overlay--closing' : ''}`}
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Film details"
+      tabIndex={-1}
+    >
       <div className="film-modal" onClick={e => e.stopPropagation()}>
         <button type="button" className="film-modal-close" onClick={onClose} aria-label="Close">
           ×

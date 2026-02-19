@@ -11,11 +11,14 @@ interface MatchResultsProps {
   onReset: () => void;
 }
 
+const MODAL_CLOSE_DURATION_MS = 220;
+
 export function MatchResults({ result, usernames, profiles, onReset }: MatchResultsProps) {
   const { userGroups, userWatchlistCounts } = result;
   const [selectedFilm, setSelectedFilm] = useState<Film | null>(null);
   const [modalDetails, setModalDetails] = useState<TMDBFilmDetails | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
+  const [modalClosing, setModalClosing] = useState(false);
 
   const handleFilmClick = useCallback((film: Film) => {
     setSelectedFilm(film);
@@ -30,8 +33,12 @@ export function MatchResults({ result, usernames, profiles, onReset }: MatchResu
   }, []);
 
   const closeModal = useCallback(() => {
-    setSelectedFilm(null);
-    setModalDetails(null);
+    setModalClosing(true);
+    setTimeout(() => {
+      setSelectedFilm(null);
+      setModalDetails(null);
+      setModalClosing(false);
+    }, MODAL_CLOSE_DURATION_MS);
   }, []);
 
   // Group results by number of users
@@ -69,9 +76,14 @@ export function MatchResults({ result, usernames, profiles, onReset }: MatchResu
   return (
     <div className="match-results">
       <div className="results-header">
-        <h2>Match Results</h2>
-        <button className="reset-button" onClick={onReset}>
-          Compare Another
+        <div className="results-header-title-row">
+          <h2>Match Results</h2>
+          <a href="#" className="compare-another-link" onClick={(e) => { e.preventDefault(); onReset(); }}>
+            ← Compare another
+          </a>
+        </div>
+        <button type="button" className="filter-genre-button">
+          Filter Genre
         </button>
       </div>
 
@@ -161,6 +173,7 @@ export function MatchResults({ result, usernames, profiles, onReset }: MatchResu
           details={modalDetails}
           loading={modalLoading}
           onClose={closeModal}
+          isClosing={modalClosing}
         />
       )}
     </div>

@@ -11,6 +11,29 @@
   z-index: 1000;
   padding: $spacing-md;
   overflow-y: auto;
+  animation: film-modal-overlay-fade-in 0.2s ease-out forwards;
+
+  &.film-modal-overlay--closing {
+    animation: film-modal-overlay-fade-out 0.2s ease-out forwards;
+  }
+}
+
+@keyframes film-modal-overlay-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes film-modal-overlay-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 
 .film-modal {
@@ -22,6 +45,34 @@
   border-radius: $border-radius-lg;
   overflow: hidden;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: film-modal-content-fade-in 0.2s ease-out forwards;
+
+}
+
+.film-modal-overlay--closing .film-modal {
+  animation: film-modal-content-fade-out 0.2s ease-out forwards;
+}
+
+@keyframes film-modal-content-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes film-modal-content-fade-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.97);
+  }
 }
 
 .film-modal-close {
