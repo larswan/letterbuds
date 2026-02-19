@@ -287,8 +287,8 @@ function App() {
       <header className="app-header">
         <div className="header-content">
           <img 
-            src="/letterboxd-dots-neg-tight.png" 
-            alt="Letterboxd" 
+            src="/Letterbuds_logo_1_compressed.png" 
+            alt="Letterbuds" 
             className="letterboxd-logo"
           />
           <h1>Letterbuds</h1>

@@ -244,7 +244,7 @@
       color: #f87171; // red-400
       font-size: 0.875rem;
       animation: fadeInUpOut 3.3s ease-out forwards;
-      z-index: 1001; // Above dropdowns and other elements
+      z-index: 3100; // Above suggestions dropdown (3000) so error is visible when dropdown is open
       background-color: $bg-secondary;
       padding: $spacing-xs $spacing-sm;
       border-radius: $border-radius;
