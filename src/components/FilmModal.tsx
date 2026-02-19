@@ -95,7 +95,7 @@ export function FilmModal({ film, details, loading, onClose, isClosing = false }
                   {details?.director && (
                     <p className="film-modal-director">Director: {details.director}</p>
                   )}
-                  {details?.genres?.length > 0 && (
+                  {details?.genres && details.genres.length > 0 && (
                     <p className="film-modal-genres">{details.genres.join(', ')}</p>
                   )}
                 </div>
