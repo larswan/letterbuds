@@ -14,7 +14,13 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: $bg-primary;
+  min-height: 100vh;
+  background-color: #2c3440;
+  background-image: url('/letterboxd-background-img.png');
+  background-repeat: repeat-x;
+  background-position: 0 0;
+  background-size: auto 100vh;
+  background-attachment: fixed;
   color: $text-primary;
   line-height: 1.6;
 }

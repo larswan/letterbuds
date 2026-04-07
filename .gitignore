@@ -1,3 +1,9 @@
+# Dependencies and build
+node_modules
+dist
+dist-ssr
+*.tsbuildinfo
+
 # Logs
 logs
 *.log
@@ -7,20 +13,20 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Environment variables
+# Environment
 .env
 .env.local
+.env.*.local
 .env.production
 
-# Admin files (sensitive information)
+# Local / sensitive
 .admin/
+reference/
+watchlist-data/
+enriched-data/
+*.local
 
-# Editor directories and files
+# Editor and OS
 .vscode/*
 !.vscode/extensions.json
 .idea
@@ -31,10 +37,6 @@ dist-ssr
 *.sln
 *.sw?
 
-/reference
-
-# Watchlist data files (scraped data for inspection)
-watchlist-data/
-
-# Enriched film data files
-enriched-data/
+# Optional
+.cache
+coverage

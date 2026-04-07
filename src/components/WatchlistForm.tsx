@@ -97,11 +97,15 @@ export function WatchlistForm({
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number>(-1);
   const [openFollowingDropdown, setOpenFollowingDropdown] = useState<string | null>(null);
   const [hasTestedFollowing, setHasTestedFollowing] = useState(false);
+  const [appearingRemoveButtonId, setAppearingRemoveButtonId] = useState<string | null>(null);
+  const [shrinkingRemoveButtonId, setShrinkingRemoveButtonId] = useState<string | null>(null);
   
   // Debounce timers for each input
   const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const dropdownRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const suggestionItemRefs = useRef<Map<string, Map<number, HTMLLIElement>>>(new Map());
+  const appearAnimationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevUserCountRef = useRef(userInputs.length);
 
   // Update state when initial values change
   useEffect(() => {
@@ -193,8 +197,32 @@ export function WatchlistForm({
     return () => {
       debounceTimers.current.forEach(timer => clearTimeout(timer));
       debounceTimers.current.clear();
+      if (appearAnimationTimerRef.current) {
+        clearTimeout(appearAnimationTimerRef.current);
+      }
     };
   }, []);
+
+  // Animate only the newly-added removable button when crossing into 3+ users
+  useEffect(() => {
+    const prevCount = prevUserCountRef.current;
+    const currentCount = userInputs.length;
+
+    if (currentCount > prevCount && currentCount > 2) {
+      const newestInput = userInputs[currentCount - 1];
+      if (newestInput) {
+        setAppearingRemoveButtonId(newestInput.id);
+        if (appearAnimationTimerRef.current) {
+          clearTimeout(appearAnimationTimerRef.current);
+        }
+        appearAnimationTimerRef.current = setTimeout(() => {
+          setAppearingRemoveButtonId(null);
+        }, 360);
+      }
+    }
+
+    prevUserCountRef.current = currentCount;
+  }, [userInputs]);
   
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -542,6 +570,15 @@ export function WatchlistForm({
 
   const removeUser = (userId: string) => {
     if (userInputs.length > 2) {
+      // When going from 3 -> 2, shrink the removed button before removing the field
+      if (userInputs.length === 3) {
+        setShrinkingRemoveButtonId(userId);
+        setTimeout(() => {
+          setUserInputs(prev => prev.filter(u => u.id !== userId));
+          setShrinkingRemoveButtonId(null);
+        }, 220);
+        return;
+      }
       setUserInputs(prev => prev.filter(u => u.id !== userId));
     }
   };
@@ -653,16 +690,16 @@ export function WatchlistForm({
           <label htmlFor={input.id}>
             {input.validation.isValid && input.validation.profile ? (
               <span className="label-with-avatar">
-                {input.validation.profile.avatarUrl && (
-                  <img 
-                    src={input.validation.profile.avatarUrl} 
-                    alt={input.validation.profile.username}
-                    className="label-avatar"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                )}
+                <img 
+                  src={input.validation.profile.avatarUrl || '/letterboxd-avatar-placeholder.png'} 
+                  alt={input.validation.profile.username}
+                  className="label-avatar"
+                  onError={(e) => {
+                    const img = e.target as HTMLImageElement;
+                    img.onerror = null;
+                    img.src = '/letterboxd-avatar-placeholder.png';
+                  }}
+                />
                 <span>{input.validation.profile.username}</span>
                 {input.validation.isValid === true && !input.validation.isValidating && (
                   <span className="label-icon valid-icon">
@@ -765,13 +802,13 @@ export function WatchlistForm({
           </div>
           <button
             type="button"
-            className="remove-user-button"
+            className={`remove-user-button${appearingRemoveButtonId === input.id ? ' remove-user-button--appearing' : ''}${shrinkingRemoveButtonId === input.id ? ' remove-user-button--shrinking' : ''}`}
             onClick={() => removeUser(input.id)}
-            disabled={isLoading || userInputs.length <= 2}
+            disabled={isLoading || userInputs.length <= 2 || shrinkingRemoveButtonId === input.id}
             aria-label="Remove user"
             style={{ backgroundColor: circleColor }}
           >
-            {userInputs.length > 2 && <FaTimes className="remove-x-icon" />}
+            <FaTimes className={`remove-x-icon ${userInputs.length > 2 ? 'is-visible' : 'is-hidden'}`} />
           </button>
           {input.validation.error && (
             <div className="error-message" role="alert">

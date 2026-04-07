@@ -146,16 +146,16 @@ export function FollowingDropdown({ username, onSelectUser, disabled, isOpen: co
                   role="option"
                   onClick={() => handleSelect(user)}
                 >
-                  {user.avatarUrl && (
-                    <img
-                      src={user.avatarUrl}
-                      alt={user.username}
-                      className="following-avatar"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                      }}
-                    />
-                  )}
+                  <img
+                    src={user.avatarUrl || '/letterboxd-avatar-placeholder.png'}
+                    alt={user.username}
+                    className="following-avatar"
+                    onError={(e) => {
+                      const img = e.target as HTMLImageElement;
+                      img.onerror = null;
+                      img.src = '/letterboxd-avatar-placeholder.png';
+                    }}
+                  />
                   <span className="following-username">{user.displayName || user.username}</span>
                 </li>
               ))}

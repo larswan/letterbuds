@@ -167,8 +167,17 @@
   .films-list {
     display: grid;
     gap: $spacing-md;
-    
+    align-items: start;
+
+    grid-template-columns: repeat(2, 1fr);
     @include tablet {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    &.films-list--count-1 {
+      grid-template-columns: 1fr;
+    }
+    &.films-list--count-2 {
       grid-template-columns: repeat(2, 1fr);
     }
   }

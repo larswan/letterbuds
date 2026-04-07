@@ -98,16 +98,16 @@ export function MatchResults({ result, usernames, profiles, onReset }: MatchResu
               <div key={username} className="user-summary">
                 <div className="user-summary-content">
                   <a href={profileUrl} target="_blank" rel="noopener noreferrer" className="user-summary-profile-link">
-                    {profile?.avatarUrl && (
-                      <img 
-                        src={profile.avatarUrl} 
-                        alt={username}
-                        className="user-avatar"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
-                    )}
+                    <img 
+                      src={profile?.avatarUrl || '/letterboxd-avatar-placeholder.png'} 
+                      alt={username}
+                      className="user-avatar"
+                      onError={(e) => {
+                        const img = e.target as HTMLImageElement;
+                        img.onerror = null;
+                        img.src = '/letterboxd-avatar-placeholder.png';
+                      }}
+                    />
                     <strong>{username}</strong>
                   </a>
                   <a href={watchlistUrl} target="_blank" rel="noopener noreferrer" className="user-count">
@@ -153,7 +153,9 @@ export function MatchResults({ result, usernames, profiles, onReset }: MatchResu
                         <span className="count-label">{group.filmCount === 1 ? 'film' : 'films'} in common</span>
                         <h4 className="group-subheading">{userNames}</h4>
                       </div>
-                      <div className="films-list">
+                      <div
+                        className={`films-list films-list--count-${Math.min(group.commonFilms.length, 3)}`}
+                      >
                         {group.commonFilms.map((film, index) => (
                           <FilmCard key={index} film={film} onFilmClick={handleFilmClick} />
                         ))}
