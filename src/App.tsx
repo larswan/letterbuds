@@ -297,9 +297,11 @@ function App() {
       </header>
 
       <main className="app-main">
-        <p className="intro-text">
-          Quickly figure out which movies everyone wants to watch by comparing Letterboxd watchlists
-        </p>
+        {!isLoading && !result && !error && (
+          <p className="intro-text">
+            Quickly figure out which movies everyone wants to watch by comparing Letterboxd watchlists
+          </p>
+        )}
 
         {error && (
           <div className="error-message">

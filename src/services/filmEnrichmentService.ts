@@ -19,6 +19,8 @@ interface OMDbResponse {
   Awards: string;
   Poster: string;
   Ratings: Array<{ Source: string; Value: string }>;
+  tomatoMeter?: string;
+  tomatoUserMeter?: string;
   Metascore: string;
   imdbRating: string;
   imdbVotes: string;
@@ -58,9 +60,12 @@ export interface TMDBFilmDetails {
   overview: string | null;
   genres: string[];
   voteAverage: number | null;
+  ratings: Array<{ source: string; value: string; type?: 'critic' | 'audience' | 'aggregate' }>;
   releaseDate: string | null;
   runtime: number | null;
   director: string | null;
+  writer: string | null;
+  cast: string[];
   trailerUrl: string | null;
 }
 
@@ -247,6 +252,46 @@ export async function getFilmDetailsFromTMDB(film: Film): Promise<TMDBFilmDetail
   if (!tmdbId) return null;
 
   try {
+    let omdbRatings: Array<{ source: string; value: string; type?: 'critic' | 'audience' | 'aggregate' }> = [];
+    if (film.imdbId && OMDb_API_KEY) {
+      try {
+        // Single OMDb request for maximum rating metadata
+        const omdbRes = await fetch(`https://www.omdbapi.com/?i=${film.imdbId}&apikey=${OMDb_API_KEY}&tomatoes=true`);
+        if (omdbRes.ok) {
+          const omdbData: OMDbResponse = await omdbRes.json();
+          console.log(`[OMDB] Full response for ${film.title} (${film.imdbId})`, omdbData);
+          if (omdbData.Response !== 'False') {
+            if (omdbData.imdbRating && omdbData.imdbRating !== 'N/A') {
+              omdbRatings.push({ source: 'IMDb', value: `${omdbData.imdbRating}/10`, type: 'aggregate' });
+            }
+            if (Array.isArray(omdbData.Ratings)) {
+              omdbData.Ratings.forEach((r) => {
+                if (!r?.Source || !r?.Value || r.Value === 'N/A') return;
+                let source = r.Source;
+                let type: 'critic' | 'audience' | 'aggregate' = 'aggregate';
+                if (source === 'Internet Movie Database') source = 'IMDb';
+                if (source === 'Rotten Tomatoes') type = 'critic';
+                if (source === 'Metacritic') type = 'critic';
+                const alreadyIncluded = omdbRatings.some((existing) => existing.source === source);
+                if (!alreadyIncluded) {
+                  omdbRatings.push({ source, value: r.Value, type });
+                }
+              });
+            }
+            if (omdbData.tomatoUserMeter && omdbData.tomatoUserMeter !== 'N/A') {
+              omdbRatings.push({
+                source: 'Rotten Tomatoes Audience',
+                value: `${omdbData.tomatoUserMeter}%`,
+                type: 'audience',
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.warn(`[ENRICH] Error fetching OMDb ratings for ${film.title}:`, error);
+      }
+    }
+
     const [movieRes, creditsRes, videosRes] = await Promise.all([
       fetch(`${TMDB_BASE}/movie/${tmdbId}?api_key=${TMDB_API_KEY}`),
       fetch(`${TMDB_BASE}/movie/${tmdbId}/credits?api_key=${TMDB_API_KEY}`),
@@ -258,6 +303,17 @@ export async function getFilmDetailsFromTMDB(film: Film): Promise<TMDBFilmDetail
     const videos = videosRes.ok ? await videosRes.json() : null;
 
     const director = credits?.crew?.find((c: { job: string }) => c.job === 'Director')?.name ?? null;
+    const writerCredits = Array.isArray(credits?.crew)
+      ? credits.crew.filter((c: { job: string; name: string }) =>
+          c.job === 'Writer' || c.job === 'Screenplay' || c.job === 'Story'
+        )
+      : [];
+    const writer = writerCredits.length > 0
+      ? Array.from(new Set(writerCredits.map((c: { name: string }) => c.name))).join(', ')
+      : null;
+    const cast = Array.isArray(credits?.cast)
+      ? credits.cast.slice(0, 5).map((c: { name: string }) => c.name).filter(Boolean)
+      : [];
     const trailer = videos?.results?.find((v: { site: string; type: string }) => v.site === 'YouTube' && v.type === 'Trailer');
     const trailerUrl = trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : null;
 
@@ -270,9 +326,12 @@ export async function getFilmDetailsFromTMDB(film: Film): Promise<TMDBFilmDetail
       overview: movie?.overview ?? null,
       genres: (movie?.genres ?? []).map((g: { name: string }) => g.name),
       voteAverage: movie?.vote_average ?? null,
+      ratings: omdbRatings,
       releaseDate: movie?.release_date ?? null,
       runtime: movie?.runtime ?? null,
       director,
+      writer,
+      cast,
       trailerUrl,
     };
   } catch (error) {

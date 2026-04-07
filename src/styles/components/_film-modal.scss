@@ -179,20 +179,55 @@
   min-width: 0;
 
   .film-modal-title {
-    margin: 0 0 $spacing-xs 0;
+    margin: 0 0 5px 0;
     font-size: 1.35rem;
     color: $text-primary;
     line-height: 1.2;
   }
 
   .film-modal-year,
-  .film-modal-rating,
   .film-modal-runtime,
   .film-modal-director,
-  .film-modal-genres {
+  .film-modal-genres,
+  .film-modal-writer,
+  .film-modal-cast {
     margin: 0.25rem 0 0 0;
     font-size: 0.9rem;
     color: $text-secondary;
+  }
+
+  .film-modal-year {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 12px;
+    line-height: 1.2;
+  }
+
+  .film-modal-ratings-row {
+    margin-top: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+  }
+
+  .film-modal-rating {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: $text-secondary;
+    
+    .film-modal-rating-icon {
+      width: 18px;
+      height: 18px;
+      object-fit: contain;
+      flex-shrink: 0;
+    }
+
+    .film-modal-rating-value {
+      font-size: 0.9rem;
+      line-height: 1.2;
+    }
   }
 
   .film-modal-genres {
@@ -228,6 +263,7 @@
 
 .film-modal-btn {
   @include button-base;
+  padding: 0.5rem 1rem; // Reduced by 0.5 from base spacing
   display: inline-block;
   text-decoration: none;
   text-align: center;
@@ -256,7 +292,18 @@
   &.film-modal-btn-letterboxd {
     background: $bg-primary;
     color: $text-primary;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
     border: 1px solid rgba(255, 255, 255, 0.2);
+
+    .film-modal-btn-letterboxd-icon {
+      width: 20px;
+      height: 20px;
+      display: block;
+      object-fit: contain;
+    }
 
     &:hover {
       background: rgba(255, 255, 255, 0.08);
