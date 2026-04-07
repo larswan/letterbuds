@@ -1,84 +1,98 @@
-@use 'sass:color';
-@use '../variables' as *;
-@use '../mixins' as *;
+@use "sass:color";
+@use "../variables" as *;
+@use "../mixins" as *;
 
 .watchlist-form {
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  
-    .form-group {
-      position: relative;
-      margin-bottom: $spacing-md;
-      width: 100%;
-      max-width: 600px; // Match container max-width
-      padding-left: 0; // No longer need space for left circles
-      padding-right: 40px; // Always reserve space for remove button (even when hidden)
-      
-      // When dropdown is active, ensure it appears above other form groups
-      &.has-active-dropdown {
-        z-index: 100;
-      }
-      
-      .remove-user-button {
-        position: absolute;
-        right: 0;
-        // Center vertically on input: label height + label margin + input center
-        // Label: 0.9rem font-size * 1.5 line-height = 1.35rem, margin-bottom: 0.5rem
-        // Input center: 1.35rem + 0.5rem + (44px / 2) = 1.35rem + 0.5rem + 22px
-        top: calc(1.35rem + 0.5rem + 22px);
-        transform: translateY(-50%);
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        border: none;
-        cursor: pointer;
-        padding: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: transform 0.2s ease;
-        z-index: 10;
-        opacity: 1; // Always full opacity
-        
-        .remove-x-icon {
-          color: white;
-          font-size: 16px;
+
+  .form-group {
+    position: relative;
+    margin-bottom: $spacing-md;
+    width: 100%;
+    max-width: 600px; // Match container max-width
+    padding-left: 0; // No longer need space for left circles
+    padding-right: 40px; // Always reserve space for remove button (even when hidden)
+    transform-origin: top center;
+
+    // When dropdown is active, ensure it appears above other form groups
+    &.has-active-dropdown {
+      z-index: 100;
+    }
+
+    &.form-group--appearing {
+      overflow: hidden;
+      animation: formGroupSlideIn 0.28s ease-out;
+    }
+
+    &.form-group--removing {
+      overflow: hidden;
+      animation: formGroupSlideOut 0.24s ease-in forwards;
+      pointer-events: none;
+    }
+
+    .remove-user-button {
+      position: absolute;
+      right: 0;
+      // Center vertically on input: label height + label margin + input center
+      // Label: 0.9rem font-size * 1.5 line-height = 1.35rem, margin-bottom: 0.5rem
+      // Input center: 1.35rem + 0.5rem + (44px / 2) = 1.35rem + 0.5rem + 22px
+      top: calc(1.35rem + 0.5rem + 22px);
+      transform: translateY(-50%);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s ease;
+      z-index: 10;
+      opacity: 1; // Always full opacity
+
+      .remove-x-icon {
+        color: white;
+        font-size: 12px;
+        opacity: 0;
+        transform: scale(0.5);
+        transition:
+          opacity 0.2s ease-out,
+          transform 0.2s ease-out;
+
+        &.is-visible {
+          opacity: 1;
+          transform: scale(1);
+        }
+
+        &.is-hidden {
           opacity: 0;
           transform: scale(0.5);
-          transition: opacity 0.2s ease-out, transform 0.2s ease-out;
-
-          &.is-visible {
-            opacity: 1;
-            transform: scale(1);
-          }
-
-          &.is-hidden {
-            opacity: 0;
-            transform: scale(0.5);
-          }
-        }
-
-        &.remove-user-button--appearing {
-          animation: removeButtonPopIn 0.34s ease-out;
-        }
-
-        &.remove-user-button--shrinking {
-          animation: removeButtonShrinkOut 0.22s ease-out forwards;
-          pointer-events: none;
-        }
-        
-        &:hover:not(:disabled) {
-          transform: translateY(-50%) scale(1.1);
-        }
-        
-        &:disabled {
-          cursor: not-allowed;
-          opacity: 1; // Keep full opacity even when disabled
         }
       }
-    
+
+      &.remove-user-button--appearing {
+        animation: removeButtonPopIn 0.34s ease-out;
+      }
+
+      &.remove-user-button--shrinking {
+        animation: removeButtonShrinkOut 0.22s ease-out forwards;
+        pointer-events: none;
+      }
+
+      &:hover:not(:disabled) {
+        transform: translateY(-50%) scale(1.1);
+      }
+
+      &:disabled {
+        cursor: not-allowed;
+        opacity: 1; // Keep full opacity even when disabled
+      }
+    }
+
     label {
       display: flex;
       align-items: center;
@@ -89,13 +103,13 @@
       font-size: 0.9rem;
       position: relative;
       z-index: 1; // Ensure label is above circle
-      
+
       .label-with-avatar {
         display: flex;
         align-items: center;
         gap: $spacing-xs;
         flex: 1;
-        
+
         .label-avatar {
           width: 24px;
           height: 24px;
@@ -104,14 +118,14 @@
           flex-shrink: 0;
         }
       }
-      
+
       .label-icon {
         display: flex;
         align-items: center;
         justify-content: center;
         margin-left: $spacing-xs;
         flex-shrink: 0;
-        
+
         &.valid-icon {
           color: #4ade80; // green-400
           font-size: 16px;
@@ -119,11 +133,11 @@
         }
       }
     }
-    
+
     .input-wrapper {
       position: relative;
       // Removed z-index to avoid creating stacking context that limits dropdown
-      
+
       input {
         width: 100%;
         padding: $spacing-sm;
@@ -135,34 +149,35 @@
         font-size: 1rem;
         height: 44px; // Fixed height for consistent alignment
         box-sizing: border-box;
-        transition: border-color 0.2s ease, box-shadow 0.2s ease;
-        
+        transition:
+          border-color 0.2s ease,
+          box-shadow 0.2s ease;
+
         &:focus {
           outline: none;
           border-color: $accent-primary;
         }
-        
+
         &::placeholder {
           color: $text-muted;
         }
-        
+
         &:disabled {
           opacity: 0.6;
           cursor: not-allowed;
         }
-        
+
         &.valid {
           border-color: #4ade80; // green-400
           box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.2);
         }
-        
+
         &.invalid {
           border-color: #f87171; // red-400
           box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.2);
         }
       }
-      
-      
+
       .dropdown-arrow-icon {
         position: absolute;
         right: 35px;
@@ -175,7 +190,7 @@
         transition: opacity 0.2s ease;
         opacity: 0.6;
       }
-      
+
       .input-icon {
         position: absolute;
         right: 12px;
@@ -187,7 +202,7 @@
         pointer-events: none;
         animation: fadeInScale 0.3s ease-out;
         z-index: 2;
-        
+
         &.validating {
           .spinner {
             width: 16px;
@@ -198,25 +213,25 @@
             animation: spin 0.8s linear infinite;
           }
         }
-        
+
         &.valid-icon {
           color: #4ade80; // green-400
           font-size: 16px;
           animation: checkmark 0.5s ease-out;
         }
-        
+
         &.invalid-icon {
           color: #f87171; // red-400
           font-size: 16px;
           animation: shake 0.4s ease-out;
         }
       }
-      
+
       // Hide dropdown arrow when input has validation icons
       &:has(.input-icon) .dropdown-arrow-icon {
         display: none;
       }
-      
+
       .suggestions-dropdown {
         position: absolute;
         top: 100%;
@@ -231,31 +246,31 @@
         max-height: 200px;
         overflow-y: auto;
         animation: slideDown 0.2s ease-out;
-        
+
         ul {
           list-style: none;
           margin: 0;
           padding: $spacing-xs 0;
         }
-        
+
         li {
           padding: $spacing-sm $spacing-md;
           color: $text-primary;
           cursor: pointer;
           transition: background-color 0.15s ease;
-          
+
           &:hover,
           &.selected {
             background-color: rgba(255, 255, 255, 0.1);
           }
-          
+
           &.selected {
             background-color: rgba(255, 255, 255, 0.15);
           }
         }
       }
     }
-    
+
     .error-message {
       position: absolute;
       top: 100%;
@@ -276,35 +291,34 @@
       gap: $spacing-xs;
     }
   }
-  
+
   .add-user-button-wrapper {
     position: relative;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
     margin-bottom: $spacing-md;
     width: 100%;
     max-width: 600px; // Match container max-width
     padding-left: 0; // No longer need space for left circles
-    padding-right: 0;
-    padding-top: 0;
+    padding-right: 9px;
+    min-height: 44px; // Keep vertical rhythm with input rows
   }
-  
+
   .add-user-button {
-    @include button-base;
-    width: 100%;
-    background-color: $bg-secondary;
+    width: auto;
+    min-height: 32px;
+    border: none;
+    background: transparent;
     color: $text-primary;
-    border: 1px dashed rgba(255, 255, 255, 0.2);
-    padding: $spacing-sm; // Match input padding
-    min-height: 44px; // Match input height
+    padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: $spacing-xs;
-    
-    &:not(:disabled):hover {
-      background-color: color.adjust($bg-secondary, $lightness: 5%);
-      border-color: rgba(255, 255, 255, 0.3);
-    }
-    
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+
     &:disabled {
       opacity: 0.5;
       cursor: not-allowed;
@@ -314,8 +328,30 @@
       opacity: 0;
       animation: buttonIconFadeIn 0.24s ease-out forwards;
     }
+
+    .add-user-text {
+      color: $text-secondary;
+      font-size: 0.95rem;
+      font-weight: 700;
+    }
+
+    .add-user-plus-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: transparent;
+      color: #fff;
+      padding: 0;
+      font-size: 16px;
+      transform: rotate(45deg) scale(1);
+      transition: transform 0.14s ease-out;
+    }
+
+    &:not(:disabled):active .add-user-plus-icon {
+      transform: rotate(45deg) scale(0.92);
+    }
   }
-  
+
   .match-button {
     @include button-base;
     width: 100%;
@@ -324,11 +360,11 @@
     color: white;
     margin-top: 0;
     box-sizing: border-box;
-    
+
     &:not(:disabled):hover {
       background-color: color.adjust(#ee7000, $lightness: 5%);
     }
-    
+
     &:disabled {
       opacity: 0.5;
       cursor: not-allowed;
@@ -381,6 +417,36 @@
   }
 }
 
+@keyframes formGroupSlideIn {
+  0% {
+    opacity: 0;
+    max-height: 0;
+    margin-bottom: 0;
+    transform: translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    max-height: 260px;
+    margin-bottom: $spacing-md;
+    transform: translateY(0);
+  }
+}
+
+@keyframes formGroupSlideOut {
+  0% {
+    opacity: 1;
+    max-height: 260px;
+    margin-bottom: $spacing-md;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    max-height: 0;
+    margin-bottom: 0;
+    transform: translateY(-8px);
+  }
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -402,13 +468,21 @@
 }
 
 @keyframes shake {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateY(-50%) translateX(0);
   }
-  10%, 30%, 50%, 70%, 90% {
+  10%,
+  30%,
+  50%,
+  70%,
+  90% {
     transform: translateY(-50%) translateX(-4px);
   }
-  20%, 40%, 60%, 80% {
+  20%,
+  40%,
+  60%,
+  80% {
     transform: translateY(-50%) translateX(4px);
   }
 }
@@ -453,4 +527,3 @@
     transform: translateY(-8px);
   }
 }
-
