@@ -10,13 +10,103 @@ import { UserProfile, FollowingUser } from "../types";
 import { FollowingDropdown } from "./FollowingDropdown";
 import "../styles/components/_form.scss";
 
+interface FormRecoveryHints {
+  emptyWatchlist: string[];
+  fetchFailed: string[];
+}
+
 interface WatchlistFormProps {
   onSubmit: (usernames: string[]) => void;
   isLoading: boolean;
   initialUsernames?: string[];
   initialProfiles?: (UserProfile | null)[];
+  formRecoveryHints?: FormRecoveryHints | null;
   followingFeatureEnabled?: boolean | null; // null = testing, true/false = result
   onFollowingFeatureStatusChange?: (enabled: boolean) => void;
+}
+
+function validationFromRecovery(
+  username: string,
+  hints: FormRecoveryHints | null | undefined,
+): UserValidationState | null {
+  if (!hints) return null;
+  const trimmed = username.trim();
+  const t = trimmed.toLowerCase();
+  if (!t) return null;
+  if (hints.emptyWatchlist.some((u) => u.toLowerCase() === t)) {
+    return {
+      isValidating: false,
+      isValid: false,
+      profile: null,
+      error: `${trimmed}'s watchlist is empty`,
+      lastValidatedValue: trimmed,
+    };
+  }
+  if (hints.fetchFailed.some((u) => u.toLowerCase() === t)) {
+    return {
+      isValidating: false,
+      isValid: false,
+      profile: null,
+      error: `Couldn't load ${trimmed}'s watchlist`,
+      lastValidatedValue: trimmed,
+    };
+  }
+  return null;
+}
+
+function buildInitialUserInputs(
+  initialUsernames: string[],
+  initialProfiles: (UserProfile | null)[],
+  hints: FormRecoveryHints | null | undefined,
+): UserInput[] {
+  if (initialUsernames.length >= 2) {
+    return initialUsernames.map((username, index) => {
+      const recovered = validationFromRecovery(username, hints);
+      if (recovered) {
+        return {
+          id: `user-${index}`,
+          username,
+          validation: recovered,
+        };
+      }
+      return {
+        id: `user-${index}`,
+        username,
+        validation: {
+          isValidating: false,
+          isValid: initialProfiles[index] ? true : null,
+          profile: initialProfiles[index] || null,
+          error: null,
+          lastValidatedValue: initialProfiles[index]
+            ? username.trim()
+            : null,
+        },
+      };
+    });
+  }
+
+  return [
+    {
+      id: "user-0",
+      username: "",
+      validation: {
+        isValidating: false,
+        isValid: null,
+        profile: null,
+        error: null,
+        lastValidatedValue: null,
+      },
+    },
+  ];
+}
+
+function allocateUserInputId(existing: UserInput[]): string {
+  const nums = existing.map((u) => {
+    const m = /^user-(\d+)$/.exec(u.id);
+    return m ? parseInt(m[1], 10) : 0;
+  });
+  const maxNum = nums.length > 0 ? Math.max(...nums) : -1;
+  return `user-${maxNum + 1}`;
 }
 
 interface UserInput {
@@ -85,52 +175,15 @@ export function WatchlistForm({
   isLoading,
   initialUsernames = [],
   initialProfiles = [],
+  formRecoveryHints = null,
   followingFeatureEnabled = null,
   onFollowingFeatureStatusChange,
 }: WatchlistFormProps) {
-  const [userInputs, setUserInputs] = useState<UserInput[]>(() => {
-    // Initialize with at least 2 users, or use initial values
-    if (initialUsernames.length >= 2) {
-      return initialUsernames.map((username, index) => ({
-        id: `user-${index}`,
-        username,
-        validation: {
-          isValidating: false,
-          isValid: initialProfiles[index] ? true : null,
-          profile: initialProfiles[index] || null,
-          error: null,
-          lastValidatedValue: initialProfiles[index] ? username.trim() : null,
-        },
-      }));
-    }
-    return [
-      {
-        id: "user-0",
-        username: "",
-        validation: {
-          isValidating: false,
-          isValid: null,
-          profile: null,
-          error: null,
-          lastValidatedValue: null,
-        },
-      },
-      {
-        id: "user-1",
-        username: "",
-        validation: {
-          isValidating: false,
-          isValid: null,
-          profile: null,
-          error: null,
-          lastValidatedValue: null,
-        },
-      },
-    ];
-  });
+  const [userInputs, setUserInputs] = useState<UserInput[]>(() =>
+    buildInitialUserInputs(initialUsernames, initialProfiles, formRecoveryHints),
+  );
   const [suggestions, setSuggestions] =
     useState<string[]>(getStoredUsernames());
-  const [nextId, setNextId] = useState(userInputs.length);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] =
     useState<number>(-1);
@@ -164,26 +217,42 @@ export function WatchlistForm({
   );
   const prevUserCountRef = useRef(userInputs.length);
 
-  // Update state when initial values change
+  // Update state when initial values change (e.g. reset from results)
   useEffect(() => {
     if (initialUsernames.length >= 2) {
-      // Always update to ensure validation state is preserved when resetting
       setUserInputs(
-        initialUsernames.map((username, index) => ({
-          id: `user-${index}`,
-          username,
+        buildInitialUserInputs(
+          initialUsernames,
+          initialProfiles,
+          formRecoveryHints,
+        ),
+      );
+    }
+  }, [initialUsernames, initialProfiles, formRecoveryHints]);
+
+  // After the first username validates, reveal a second field (wizard step)
+  useEffect(() => {
+    setUserInputs((prev) => {
+      const validCount = prev.filter(
+        (u) => u.validation.isValid === true,
+      ).length;
+      if (validCount !== 1 || prev.length !== 1) return prev;
+      return [
+        ...prev,
+        {
+          id: allocateUserInputId(prev),
+          username: "",
           validation: {
             isValidating: false,
-            isValid: initialProfiles[index] ? true : null,
-            profile: initialProfiles[index] || null,
+            isValid: null,
+            profile: null,
             error: null,
-            lastValidatedValue: initialProfiles[index] ? username.trim() : null,
+            lastValidatedValue: null,
           },
-        })),
-      );
-      setNextId(initialUsernames.length);
-    }
-  }, [initialUsernames, initialProfiles]);
+        },
+      ];
+    });
+  }, [userInputs]);
 
   // Test following feature when first username is validated (once per session)
   useEffect(() => {
@@ -282,7 +351,7 @@ export function WatchlistForm({
     const prevCount = prevUserCountRef.current;
     const currentCount = userInputs.length;
 
-    if (currentCount > prevCount && currentCount > 2) {
+    if (currentCount > prevCount && currentCount > 1) {
       const newestInput = userInputs[currentCount - 1];
       if (newestInput) {
         setAppearingRemoveButtonId(newestInput.id);
@@ -772,22 +841,24 @@ export function WatchlistForm({
 
   const addUser = () => {
     if (userInputs.length < MAX_USERS) {
-      const newId = `user-${nextId}`;
-      setUserInputs((prev) => [
-        ...prev,
-        {
-          id: newId,
-          username: "",
-          validation: {
-            isValidating: false,
-            isValid: null,
-            profile: null,
-            error: null,
-            lastValidatedValue: null,
+      let newId = "";
+      setUserInputs((prev) => {
+        newId = allocateUserInputId(prev);
+        return [
+          ...prev,
+          {
+            id: newId,
+            username: "",
+            validation: {
+              isValidating: false,
+              isValid: null,
+              profile: null,
+              error: null,
+              lastValidatedValue: null,
+            },
           },
-        },
-      ]);
-      setNextId((prev) => prev + 1);
+        ];
+      });
       setAppearingFormGroupId(newId);
       setTimeout(() => {
         setAppearingFormGroupId(null);
@@ -796,7 +867,7 @@ export function WatchlistForm({
   };
 
   const removeUser = (userId: string) => {
-    if (userInputs.length > 2) {
+    if (userInputs.length > 1) {
       setShrinkingRemoveButtonId(userId);
       setRemovingFormGroupId(userId);
       setTimeout(() => {
@@ -845,7 +916,7 @@ export function WatchlistForm({
         setUserInputs((prev) => [
           ...prev,
           {
-            id: `user-${nextId}`,
+            id: allocateUserInputId(prev),
             username: selectedUser.username,
             validation: {
               isValidating: false,
@@ -859,7 +930,6 @@ export function WatchlistForm({
             },
           },
         ]);
-        setNextId((prev) => prev + 1);
       }
     }
   };
@@ -883,12 +953,11 @@ export function WatchlistForm({
       return;
     }
 
-    // If we have at least 2 validated users, proceed (ignore empty fields)
+      // If we have at least 2 validated users, proceed (ignore empty fields)
     if (validUsers.length >= 2) {
       // Remove empty/invalid fields from the form (close them)
       setUserInputs((prev) => {
         const filtered = prev.filter((u) => u.validation.isValid === true);
-        // Ensure we have at least 2 fields for next time
         while (filtered.length < 2) {
           filtered.push({
             id: `user-${filtered.length}`,
@@ -916,9 +985,22 @@ export function WatchlistForm({
   );
   const hasAtLeastTwoValid =
     userInputs.filter((u) => u.validation.isValid === true).length >= 2;
+  const validUsernameCount = userInputs.filter(
+    (u) => u.validation.isValid === true,
+  ).length;
+  const instructionText =
+    validUsernameCount === 0
+      ? "Enter a Letterboxd username."
+      : validUsernameCount === 1
+        ? "Enter a second Letterboxd user."
+        : `Now click "Compare".`;
+  const showCompareAndAdd = validUsernameCount >= 2;
 
   return (
     <form className="watchlist-form" onSubmit={handleSubmit}>
+      <p className="watchlist-form__instruction" aria-live="polite">
+        {instructionText}
+      </p>
       {userInputs.map((input, index) => {
         const colorIndex = index % 3;
         const circleColor =
@@ -927,14 +1009,42 @@ export function WatchlistForm({
             : colorIndex === 1
               ? "#00E054"
               : "#40BCF4";
+        const trimmedUsername = input.username.trim();
+        const showWatchlistEmptyLabel =
+          input.validation.isValid === false &&
+          Boolean(input.validation.error?.includes("watchlist is empty"));
+        const showFetchFailedLabel =
+          input.validation.isValid === false &&
+          Boolean(input.validation.error?.startsWith("Couldn't load"));
+        const showErrorBubble =
+          Boolean(input.validation.error) &&
+          !showWatchlistEmptyLabel &&
+          !showFetchFailedLabel;
+        const removeMode: "hidden" | "idle" | "outline" | "filled" =
+          userInputs.length <= 1
+            ? "hidden"
+            : !trimmedUsername
+              ? "idle"
+              : input.validation.isValid === true
+                ? "filled"
+                : "outline";
+
         return (
           <div
             key={input.id}
-            className={`form-group ${activeDropdown === input.id ? "has-active-dropdown" : ""}${appearingFormGroupId === input.id ? " form-group--appearing" : ""}${removingFormGroupId === input.id ? " form-group--removing" : ""}`}
+            className={`form-group${userInputs.length === 1 ? " form-group--solo" : ""} ${activeDropdown === input.id ? "has-active-dropdown" : ""}${appearingFormGroupId === input.id ? " form-group--appearing" : ""}${removingFormGroupId === input.id ? " form-group--removing" : ""}`}
             style={{ "--circle-color": circleColor } as React.CSSProperties}
           >
             <label htmlFor={input.id}>
-              {input.validation.isValid && input.validation.profile ? (
+              {showWatchlistEmptyLabel ? (
+                <span className="label-watchlist-empty">
+                  {`${trimmedUsername}'s watchlist is empty`}
+                </span>
+              ) : showFetchFailedLabel ? (
+                <span className="label-watchlist-empty">
+                  {input.validation.error}
+                </span>
+              ) : input.validation.isValid && input.validation.profile ? (
                 <span className="label-with-avatar">
                   <img
                     src={
@@ -957,6 +1067,10 @@ export function WatchlistForm({
                       </span>
                     )}
                 </span>
+              ) : index === 0 ? (
+                <span className="label-placeholder" aria-hidden="true">
+                  {"\u00a0"}
+                </span>
               ) : (
                 <>
                   {`${getOrdinalName(index)} Username`}
@@ -974,6 +1088,11 @@ export function WatchlistForm({
                 id={input.id}
                 type="text"
                 value={input.username}
+                aria-label={
+                  index === 0 && !input.validation.profile
+                    ? "Letterboxd username"
+                    : undefined
+                }
                 onChange={(e) => handleUsernameChange(e.target.value, input.id)}
                 onFocus={() => {
                   // Close Find Friends dropdown when username input is focused
@@ -997,7 +1116,6 @@ export function WatchlistForm({
                 onKeyDown={(e) => handleKeyDown(e, input.id)}
                 placeholder="Enter Letterboxd username"
                 disabled={isLoading}
-                required
                 autoComplete="off"
                 className={
                   input.validation.isValid === true
@@ -1074,23 +1192,29 @@ export function WatchlistForm({
                 </span>
               )}
             </div>
-            <button
-              type="button"
-              className={`remove-user-button${appearingRemoveButtonId === input.id ? " remove-user-button--appearing" : ""}${shrinkingRemoveButtonId === input.id ? " remove-user-button--shrinking" : ""}`}
-              onClick={() => removeUser(input.id)}
-              disabled={
-                isLoading ||
-                userInputs.length <= 2 ||
-                shrinkingRemoveButtonId === input.id
-              }
-              aria-label="Remove user"
-              style={{ backgroundColor: circleColor }}
-            >
-              <FaTimes
-                className={`remove-x-icon ${userInputs.length > 2 ? "is-visible" : "is-hidden"}`}
-              />
-            </button>
-            {input.validation.error && (
+            {removeMode !== "hidden" && (
+              <button
+                type="button"
+                className={`remove-user-button remove-user-button--${removeMode}${appearingRemoveButtonId === input.id ? " remove-user-button--appearing" : ""}${shrinkingRemoveButtonId === input.id ? " remove-user-button--shrinking" : ""}`}
+                onClick={() => removeUser(input.id)}
+                disabled={
+                  isLoading ||
+                  userInputs.length <= 1 ||
+                  shrinkingRemoveButtonId === input.id
+                }
+                aria-label="Remove user"
+                style={
+                  removeMode === "filled"
+                    ? ({ backgroundColor: circleColor } as React.CSSProperties)
+                    : undefined
+                }
+              >
+                <FaTimes
+                  className={`remove-x-icon ${userInputs.length > 1 ? "is-visible" : "is-hidden"}`}
+                />
+              </button>
+            )}
+            {showErrorBubble && (
               <div className="error-message" role="alert">
                 {input.validation.error}
               </div>
@@ -1123,7 +1247,7 @@ export function WatchlistForm({
         );
       })}
 
-      {userInputs.length < MAX_USERS && (
+      {showCompareAndAdd && userInputs.length < MAX_USERS && (
         <div className="add-user-button-wrapper">
           <button
             type="button"
@@ -1138,13 +1262,15 @@ export function WatchlistForm({
         </div>
       )}
 
-      <button
-        type="submit"
-        className="match-button"
-        disabled={isLoading || !allValid || !hasAtLeastTwoValid}
-      >
-        {isLoading ? "Matching..." : "Match"}
-      </button>
+      {showCompareAndAdd && (
+        <button
+          type="submit"
+          className="match-button"
+          disabled={isLoading || !allValid || !hasAtLeastTwoValid}
+        >
+          {isLoading ? "Comparing..." : "Compare"}
+        </button>
+      )}
     </form>
   );
 }

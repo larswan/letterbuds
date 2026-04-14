@@ -26,11 +26,16 @@ function App() {
     boolean | null
   >(null); // null = testing, true/false = result
   const [formKey, setFormKey] = useState(0); // Key to force form remount on reset
+  const [formRecoveryHints, setFormRecoveryHints] = useState<{
+    emptyWatchlist: string[];
+    fetchFailed: string[];
+  } | null>(null);
 
   const handleSubmit = async (usernamesArray: string[]) => {
     setIsLoading(true);
     setError(null);
     setResult(null);
+    setFormRecoveryHints(null);
     setUsernames(usernamesArray);
 
     try {
@@ -43,6 +48,8 @@ function App() {
       const userFilms = [];
       const userProfiles: (UserProfile | null)[] = [];
       const failedUsers: string[] = [];
+      const emptyWatchlistUsernames: string[] = [];
+      const fetchFailedUsernames: string[] = [];
       const enrichmentQueue: Film[] = []; // Queue for films to enrich
       const enrichedFilmsCache = new Map<string, Film>(); // Cache for enriched films during scraping
 
@@ -116,6 +123,9 @@ function App() {
             );
           }
 
+          if (!films.length) {
+            emptyWatchlistUsernames.push(username);
+          }
           userFilms.push({ username, films });
           userProfiles.push(profile);
 
@@ -165,6 +175,14 @@ function App() {
             err,
           );
           failedUsers.push(username);
+          const looksLikeEmptyWatchlist =
+            /watchlist is empty/i.test(errorMessage) ||
+            /not found or watchlist/i.test(errorMessage);
+          if (looksLikeEmptyWatchlist) {
+            emptyWatchlistUsernames.push(username);
+          } else {
+            fetchFailedUsernames.push(username);
+          }
 
           // Add empty data for this user so we can still process others
           userFilms.push({ username, films: [] });
@@ -175,11 +193,18 @@ function App() {
       // Check if we got any valid data
       const validUsers = userFilms.filter((u) => u.films.length > 0);
       if (validUsers.length < 2) {
-        let errorMsg = `Need at least 2 users with valid watchlists. Only ${validUsers.length} user(s) had valid data.`;
-        if (failedUsers.length > 0) {
-          errorMsg += ` Failed to fetch: ${failedUsers.join(", ")}.`;
-        }
-        throw new Error(errorMsg);
+        console.warn(
+          `[${new Date().toISOString()}] [COMPARE] Insufficient valid watchlists (${validUsers.length}); returning to form with hints.`,
+        );
+        setProfiles(usernamesArray.map(() => null));
+        setFormRecoveryHints({
+          emptyWatchlist: [...new Set(emptyWatchlistUsernames)],
+          fetchFailed: [...new Set(fetchFailedUsernames)],
+        });
+        setFormKey((k) => k + 1);
+        setIsLoading(false);
+        setCurrentScrapingUsername(undefined);
+        return;
       }
 
       // Warn if some users failed but we still have enough
@@ -377,6 +402,7 @@ function App() {
             isLoading={isLoading}
             initialUsernames={usernames}
             initialProfiles={profiles}
+            formRecoveryHints={formRecoveryHints}
             followingFeatureEnabled={followingFeatureEnabled}
             onFollowingFeatureStatusChange={setFollowingFeatureEnabled}
           />

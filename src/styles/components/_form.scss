@@ -8,13 +8,32 @@
   flex-direction: column;
   align-items: center;
 
+  .watchlist-form__instruction {
+    width: 100%;
+    max-width: 600px;
+    margin: 0 0 $spacing-md;
+    padding: $spacing-sm $spacing-md;
+    color: $text-secondary;
+    font-size: 0.95rem;
+    line-height: 1.45;
+    text-align: center;
+    border-radius: $border-radius;
+    background-color: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-sizing: border-box;
+  }
+
   .form-group {
     position: relative;
     margin-bottom: $spacing-md;
     width: 100%;
     max-width: 600px; // Match container max-width
     padding-left: 0; // No longer need space for left circles
-    padding-right: 40px; // Always reserve space for remove button (even when hidden)
+    padding-right: 40px; // Reserve space for remove button when present
+
+    &.form-group--solo {
+      padding-right: 0;
+    }
     transform-origin: top center;
 
     // When dropdown is active, ensure it appears above other form groups
@@ -34,6 +53,7 @@
     }
 
     .remove-user-button {
+      --remove-border: transparent;
       position: absolute;
       right: 0;
       // Center vertically on input: label height + label margin + input center
@@ -44,7 +64,7 @@
       width: 32px;
       height: 32px;
       border-radius: 50%;
-      border: none;
+      border: 2px solid var(--remove-border);
       cursor: pointer;
       padding: 0;
       display: flex;
@@ -91,6 +111,32 @@
         cursor: not-allowed;
         opacity: 1; // Keep full opacity even when disabled
       }
+
+      &.remove-user-button--outline {
+        background-color: transparent !important;
+        --remove-border: var(--circle-color);
+
+        .remove-x-icon {
+          color: var(--circle-color);
+        }
+      }
+
+      &.remove-user-button--filled {
+        --remove-border: transparent;
+
+        .remove-x-icon {
+          color: #fff;
+        }
+      }
+
+      &.remove-user-button--idle {
+        background-color: transparent !important;
+        --remove-border: rgba(255, 255, 255, 0.2);
+
+        .remove-x-icon {
+          color: rgba(255, 255, 255, 0.35);
+        }
+      }
     }
 
     label {
@@ -117,6 +163,16 @@
           object-fit: cover;
           flex-shrink: 0;
         }
+      }
+
+      .label-placeholder {
+        min-height: 1.35em;
+        display: block;
+      }
+
+      .label-watchlist-empty {
+        color: #f87171;
+        font-weight: 600;
       }
 
       .label-icon {
