@@ -100,7 +100,7 @@ See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) for logs, 403/503 handling, and l
 - [ ] Add explainer text above the main input section
 - [ ] Copy letterboxd spacing and style rules
 - [ ] Set favicon as logo
-- [ ]
+- [ ] Add transitions to new users being added and Xs appearing
 - [ ]
 - [ ] Improve film modal layout
 - [ ] Email/notification when key features break
@@ -110,6 +110,7 @@ See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) for logs, 403/503 handling, and l
 - [ ] Wrap username input fields in colored borders instead of having color circles t the right side
 - [ ] Improve the popup display layout on each movie
 - [ ] Impliment email notfication flags when certain features stop working
+- [ ] Add DNS level blockers of bot traffic/spamming so fetches don't get used up/banned
 - [ ] Move 'Compare another' under 'Match Results" and make it just linked text with a back arrow like "<- Compare another"
 - [ ] Fix click out issues with dropdowns
 - [ ] Retry following list feature, adding "[username] is not following any other users"
